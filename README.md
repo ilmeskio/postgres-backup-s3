@@ -62,6 +62,10 @@ This projet follows the path and great work of [schickling/dockerfiles](https://
 Also thanks to [siemens/postgres-backup-s3](https://github.com/siemens/postgres-backup-s3/tree/master) that mantained a fork.
 
 
+## Contributing
+See [Repository Guidelines](AGENTS.md) for contributor and workflow expectations.
+
+
 ## TODO
 [] add testing to ensure correct build and backup with restore
 [] walkthough for version upgrade
