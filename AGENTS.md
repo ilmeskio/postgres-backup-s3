@@ -16,6 +16,7 @@
 - Prefer uppercase snake_case for environment variables and read-only constants; use lowercase for local variables like `timestamp`.
 - Always quote substitutions ("$VAR") and keep `set -eu -o pipefail` at the top of new scripts.
 - Name new scripts consistently inside `src/` and document them in the Dockerfile `ADD` list.
+- Write explanatory comments in a collaborative, narrative voice (“we …”) so teammates understand what each command does and why it exists without chasing external references.
 
 ## Testing Guidelines
 - No automated suite yet; rely on `docker compose` scenario to validate backups and restores.
