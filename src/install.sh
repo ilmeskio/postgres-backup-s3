@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# install.sh — installs pg_dump (psql), gpg, aws-cli, and go-cron on Alpine.
+# install.sh — installs pg_dump (psql), gpg, aws-cli, and supercronic on Alpine.
 #
 # Strict mode: fail on errors, unset vars, and failed pipeline commands.
 set -euo pipefail
@@ -9,7 +9,7 @@ set -x
 # ---- expected inputs ----
 : "${TARGETARCH:?TARGETARCH not set}"       # amd64 | arm64 (from buildx)
 : "${POSTGRES_VERSION:?POSTGRES_VERSION not set}"   # e.g. 16, 15
-GOCRON_VERSION="${GOCRON_VERSION:-0.0.5}"
+SUPERCRONIC_VERSION="${SUPERCRONIC_VERSION:-0.2.36}"
 
 # Map TARGETARCH to asset arch (adjust here if you add more)
 case "$TARGETARCH" in
@@ -17,7 +17,8 @@ case "$TARGETARCH" in
   *) echo "Unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;;
 esac
 
-GOCRON_URL="https://github.com/ivoronin/go-cron/releases/download/v${GOCRON_VERSION}/go-cron_${GOCRON_VERSION}_linux_${ARCH}.tar.gz"
+SUPERCRONIC_BIN="supercronic-linux-${ARCH}"
+SUPERCRONIC_URL="https://github.com/aptible/supercronic/releases/download/v${SUPERCRONIC_VERSION}/${SUPERCRONIC_BIN}"
 
 # ---- base packages ----
 apk update
@@ -35,8 +36,7 @@ apk add --no-cache \
   gnupg \
   aws-cli \
   curl \
-  ca-certificates \
-  tar
+  ca-certificates
 
 # Verify the installed psql major matches POSTGRES_VERSION (extra safety)
 INSTALLED_MAJOR="$(psql --version | awk '{print $3}' | cut -d. -f1)"
@@ -45,13 +45,26 @@ if [ "$INSTALLED_MAJOR" != "$POSTGRES_VERSION" ]; then
   exit 1
 fi
 
-# ---- install go-cron ----
+# ---- install supercronic ----
 tmpdir="$(mktemp -d)"
+# Always delete the temporary download directory when the script stops (success or error).
 trap 'rm -rf "$tmpdir"' EXIT
 
-curl -fSL "$GOCRON_URL" -o "$tmpdir/go-cron.tgz"
-tar xvf "$tmpdir/go-cron.tgz" -C "$tmpdir"
-install -m 0755 "$tmpdir/go-cron" /usr/local/bin/go-cron
+curl -fSL "$SUPERCRONIC_URL" -o "$tmpdir/$SUPERCRONIC_BIN"
+
+if [ -z "${SUPERCRONIC_SHA1SUM:-}" ]; then
+  echo "ERROR: SUPERCRONIC_SHA1SUM must be provided for ${SUPERCRONIC_BIN}." >&2
+  echo "Hint: export SUPERCRONIC_SHA1SUM for v${SUPERCRONIC_VERSION} or update install.sh defaults." >&2
+  exit 1
+fi
+
+# Recalculate the checksum of the downloaded file; abort if it differs from the expected hash.
+(cd "$tmpdir" && printf '%s  %s\n' "$SUPERCRONIC_SHA1SUM" "$SUPERCRONIC_BIN" | sha1sum -c -)
+
+# Copy the binary into /usr/local/bin and mark it executable in the same step.
+install -m 0755 "$tmpdir/$SUPERCRONIC_BIN" \
+  "/usr/local/bin/$SUPERCRONIC_BIN"
+ln -sf "/usr/local/bin/$SUPERCRONIC_BIN" /usr/local/bin/supercronic
 
 # slim down
 apk del curl || true
@@ -59,6 +72,6 @@ apk del curl || true
 # ---- smoke checks ----
 psql --version
 aws --version
-/usr/local/bin/go-cron -h >/dev/null
+/usr/local/bin/supercronic --help >/dev/null
 
 echo "install.sh OK — TARGETARCH=${TARGETARCH}, POSTGRES_VERSION=${POSTGRES_VERSION}"

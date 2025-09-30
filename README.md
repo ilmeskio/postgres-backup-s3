@@ -29,7 +29,7 @@ pg_backup_s3:
     ENABLE_METRICS: true
 ```
 - Images are tagged by the major PostgreSQL version they support: `9`, `10`, `11`, `12`, or `13`.
-- The `SCHEDULE` variable determines backup frequency. See go-cron schedules documentation [here](http://godoc.org/github.com/robfig/cron#hdr-Predefined_schedules).
+- The `SCHEDULE` variable determines backup frequency. See [supercronic's schedule documentation](https://github.com/aptible/supercronic#usage) for supported syntax (standard cron expressions and `@every` intervals).
 - If `PASSPHRASE` is provided, the backup will be encrypted using GPG.
 - Run `docker exec <container name> sh backup.sh` to trigger a backup ad-hoc
 
@@ -69,4 +69,4 @@ See [Repository Guidelines](AGENTS.md) for contributor and workflow expectations
 ## TODO
 [] add testing to ensure correct build and backup with restore
 [] walkthough for version upgrade
-[] leverages https://github.com/aptible/supercronic?tab=readme-ov-file for cron instead of go-cron
+[x] leverages https://github.com/aptible/supercronic?tab=readme-ov-file for cron instead of go-cron

@@ -9,5 +9,10 @@ fi
 if [ -z "$SCHEDULE" ]; then
   sh backup.sh
 else
-  exec go-cron "$SCHEDULE" /bin/sh backup.sh
+  cronfile="$(mktemp)"
+  {
+    echo "SHELL=/bin/sh"
+    printf '%s /bin/sh /backup.sh\n' "$SCHEDULE"
+  } >"$cronfile"
+  exec supercronic "$cronfile"
 fi
