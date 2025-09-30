@@ -63,5 +63,6 @@ Also thanks to [siemens/postgres-backup-s3](https://github.com/siemens/postgres-
 
 
 ## TODO
-[] add testing
+[] add testing to ensure correct build and backup with restore
 [] walkthough for version upgrade
+[] leverages https://github.com/aptible/supercronic?tab=readme-ov-file for cron instead of go-cron
