@@ -1,9 +1,7 @@
 # Introduction
 This project provides Docker images to periodically back up a PostgreSQL database to AWS S3, and to restore from the backup as needed.
 
-
-
-
+Like everything else I do, the purpose is to contribue to mine and others educational path.
 
 # Usage
 ## Backup
@@ -15,7 +13,7 @@ postgres:
     POSTGRES_PASSWORD: password
 
 pg_backup_s3:
-  image: eeshugerman/postgres-backup-s3:13
+  image: ilmeskio/postgres-backup-s3:13
   environment:
     SCHEDULE: '@weekly'
     PASSPHRASE: passphrase
@@ -58,26 +56,12 @@ docker exec <container name> sh restore.sh <timestamp>
 ```
 
 # Acknowledgements
-
-
 This projet follows the path and great work of [schickling/dockerfiles](https://github.com/schickling/dockerfiles)
  and [eeshugerman/docker-postgres-backup-s3](https://github.com/eeshugerman/postgres-backup-s3) that unfortunately decided to archive the project.
 
 Also thanks to [siemens/postgres-backup-s3](https://github.com/siemens/postgres-backup-s3/tree/master) that mantained a fork.
 
 
-## Fork goals
-  - [x] dedicated repository
-  - [x] automated builds
-  - [x] support multiple PostgreSQL versions
-  - [x] backup and restore with one image
-  - [x] support encrypted (password-protected) backups
-  - [x] option to restore from specific backup by timestamp
-
-## Other changes
-  - uses `pg_dump`'s `custom` format (see [docs](https://www.postgresql.org/docs/17/app-pgdump.html))
-  - doesn't use Python 2
-  - backup blobs and all schemas by default
-  - drop and re-create all database objects on restore
-  - some env vars renamed or removed
-  - filter backups on S3 by database name
+## TODO
+[] add testing
+[] walkthough for version upgrade
