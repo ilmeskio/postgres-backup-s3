@@ -1,0 +1,161 @@
+# We run this CI workflow so we can keep confidence in our backup tooling on every supported stack.
+# The jobs cover build, migration, and multi-arch scenarios so we notice regressions before they reach production.
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  # We build the project across multiple Postgres and Alpine pairs to prove that our Docker image remains portable.
+  image-build-matrix:
+    name: Image build for Postgres ${{ matrix.pg_version }} on Alpine ${{ matrix.alpine_version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pg_version: 14
+            alpine_version: 3.20
+          - pg_version: 15
+            alpine_version: 3.20
+          - pg_version: 16
+            alpine_version: 3.20
+          - pg_version: 17
+            alpine_version: 3.21
+          - pg_version: 18
+            alpine_version: 3.22
+    steps:
+      # We fetch the latest commit so every following step has the source we want to validate.
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # We export the matrix inputs into the environment so downstream scripts compile the exact variant under test.
+      - name: Configure build inputs
+        run: |
+          # We capture the matrix Alpine version so our Dockerfile picks the right base image for this run.
+          echo "ALPINE_VERSION=${{ matrix.alpine_version }}" >> "$GITHUB_ENV"
+          # We store the Postgres version so the compose build reuses the number without repeating matrix syntax.
+          echo "POSTGRES_VERSION=${{ matrix.pg_version }}" >> "$GITHUB_ENV"
+
+      # We invoke our shared build script so we compile and validate the image exactly the way teammates do locally.
+      - name: Compose build
+        run: scripts/build-image.sh
+
+  # We verify in-place upgrades across every supported Postgres combination so restores stay reliable during rollouts.
+  upgrade-smoke-matrix:
+    name: Migrate ${{ matrix.from }} -> ${{ matrix.to }}
+    runs-on: ubuntu-latest
+    needs: image-build-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - from: 14
+            to: 15
+          - from: 14
+            to: 16
+          - from: 14
+            to: 17
+          - from: 14
+            to: 18
+          - from: 15
+            to: 16
+          - from: 15
+            to: 17
+          - from: 15
+            to: 18
+          - from: 16
+            to: 17
+          - from: 16
+            to: 18
+          - from: 17
+            to: 18
+    steps:
+      # We pull the repository again so this job has a clean workspace tied to the migration matrix entry.
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # We calculate the Alpine image that matches the highest version in play so both containers share compatible tooling.
+      - name: Configure migration inputs
+        run: |
+          # We fail fast inside this helper script so a misconfiguration stops the matrix entry immediately.
+          set -e
+          # We read the matrix versions and keep them in named variables for clarity later in the script.
+          from="${{ matrix.from }}"
+          to="${{ matrix.to }}"
+          # We compare the versions so we can pick an Alpine release that meets the stricter requirement of the two.
+          if [ "$from" -gt "$to" ]; then
+            max="$from"
+          else
+            max="$to"
+          fi
+          # We branch on the highest version so we always pair each migration with a tested Alpine base.
+          case "$max" in
+            18)
+              alpine=3.22
+              ;;
+            17)
+              alpine=3.21
+              ;;
+            *)
+              alpine=3.20
+              ;;
+          esac
+          # We persist the chosen Alpine version so later steps build matching containers.
+          echo "ALPINE_VERSION=$alpine" >> "$GITHUB_ENV"
+          # We record the origin version so the smoke test knows which dump to create.
+          echo "FROM_VERSION=$from" >> "$GITHUB_ENV"
+          # We log the destination version so the smoke test upgrades to the right target.
+          echo "TO_VERSION=$to" >> "$GITHUB_ENV"
+
+      # We run the smoke test so we can confirm that upgrades, dumps, and restores succeed for this pair.
+      - name: Run migration smoke
+        run: FROM_VERSION="$FROM_VERSION" TO_VERSION="$TO_VERSION" scripts/migration-smoke.sh
+
+  # We assemble multi-architecture images so our releases work on both AMD64 and ARM64 builders.
+  multi-arch-image:
+    name: Multi-arch build (${{ matrix.platform }})
+    runs-on: ubuntu-latest
+    needs: image-build-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            supercronic_sha: 53a484404b0c559d64f78e9481a3ec22f782dc46
+          - platform: linux/arm64
+            supercronic_sha: 58b3c15304e7b59fe7b9d66a2242f37e71cf7db6
+    steps:
+      # We clone the repo for this job so the build context mirrors the tarball we ship.
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # We enable QEMU emulation so Docker Buildx can synthesize the non-native architecture locally.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      # We initialize Buildx so we can target multiple architectures with one configuration.
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # We build the image tarball on the requested platform so both architectures stay in lock-step.
+      - name: Build image
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          SUPERCRONIC_SHA1SUM: ${{ matrix.supercronic_sha }}
+        run: |
+          # We compile the Docker image for the chosen platform and skip provenance artifacts to keep CI fast.
+          docker buildx build \
+            --platform "$PLATFORM" \
+            --build-arg ALPINE_VERSION=3.20 \
+            --build-arg POSTGRES_VERSION=16 \
+            --build-arg SUPERCRONIC_SHA1SUM="$SUPERCRONIC_SHA1SUM" \
+            --progress plain \
+            --provenance=false \
+            --sbom=false \
+            --output "type=tar,dest=build-${PLATFORM//\//-}.tar" .
+          # We discard the tarball after the build completes so CI storage stays lean.
+          rm -f build-${PLATFORM//\//-}.tar

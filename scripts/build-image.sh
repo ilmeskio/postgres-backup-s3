@@ -1,8 +1,8 @@
 #!/bin/sh
 #
-# test-local.sh — We run this helper to confirm that our Docker image still assembles with the defaults we ship.
-# The script feeds our preferred build arguments into docker build so our pre-push hook (and developers running it manually)
-# can catch version drifts or missing checksums before we share changes.
+# build-image.sh — We run this helper to confirm that our Docker image still assembles with the defaults we ship.
+# The script feeds our preferred build arguments into docker build so our pre-push hook and CI pipeline can catch
+# version drifts or missing checksums before we share changes.
 #
 # We keep strict mode on so the build check fails fast: `-e` stops on docker errors, `-u` catches missing env vars,
 # and `-o pipefail` surfaces issues in piped commands during the compose build.

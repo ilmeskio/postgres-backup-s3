@@ -58,7 +58,7 @@ fi
 export S3_PREFIX="$MIGRATION_PREFIX"
 
 # We make sure supercronic's checksum matches the running architecture. If teammates already set SUPERCRONIC_SHA1SUM
-# we keep that, otherwise we pick the default map we maintain in dev-smoke.sh to keep everything consistent.
+# we keep that, otherwise we pick the default map we maintain in full-stack-smoke.sh to keep everything consistent.
 if [ -z "${SUPERCRONIC_SHA1SUM:-}" ]; then
   ARCH="$(uname -m)"
   case "$ARCH" in

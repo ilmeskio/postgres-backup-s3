@@ -69,13 +69,13 @@ See [Repository Guidelines](AGENTS.md) for contributor and workflow expectations
 
 ### Local verification
 
-Run `scripts/test-local.sh` to confirm the Docker image still builds before sharing a branch. The helper loads `.env`
+Run `scripts/build-image.sh` to confirm the Docker image still builds before sharing a branch. The helper loads `.env`
 when present, picks architecture-aware defaults (`ALPINE_VERSION=3.20`, `POSTGRES_VERSION=16`, and the matching
 supercronic checksum), and runs `docker compose build backup` so the result mirrors our smoke test build. Override any
 of the knobs through environment variables when you want to experiment:
 
 ```sh
-$ ALPINE_VERSION=3.19 POSTGRES_VERSION=15 scripts/test-local.sh
+$ ALPINE_VERSION=3.19 POSTGRES_VERSION=15 scripts/build-image.sh
 ```
 
 To run the check automatically on every push, point Git hooks to the provided scripts:
@@ -84,12 +84,12 @@ To run the check automatically on every push, point Git hooks to the provided sc
 $ git config core.hooksPath githooks
 ```
 
-The `githooks/pre-push` script delegates to `scripts/test-local.sh`, so local pushes will fail fast whenever the image
+The `githooks/pre-push` script delegates to `scripts/build-image.sh`, so local pushes will fail fast whenever the image
 breaks.
 
 ### End-to-end smoke test (no real S3 required)
 
-Run `scripts/dev-smoke.sh` to spin up Postgres, a MinIO S3-compatible target, and the backup job via `docker compose`.
+Run `scripts/full-stack-smoke.sh` to spin up Postgres, a MinIO S3-compatible target, and the backup job via `docker compose`.
 The script seeds a demo bucket (`demo-backups`), performs a backup, and immediately restores it to verify the entire
 flow. MinIO exposes a local console at http://localhost:9001 if you want to inspect objects, and all traffic stays on
 your machine.
@@ -110,7 +110,7 @@ command line:
 $ FROM_VERSION=14 TO_VERSION=16 scripts/migration-smoke.sh
 ```
 
-The script scopes its work to an S3 prefix named `migration-smoke`, so our habitual `dev-smoke.sh` runs keep their own
+The script scopes its work to an S3 prefix named `migration-smoke`, so our habitual `full-stack-smoke.sh` runs keep their own
 objects untouched. Set `MIGRATION_PREFIX` when you want a different namespace, or flip `KEEP_STACK=1` to leave the stack
 running for follow-up exploration.
 

@@ -1,10 +1,10 @@
 #!/bin/sh
 #
-# dev-smoke.sh — We spin up the docker compose stack (Postgres + backup job + MinIO), seed the demo bucket,
+# full-stack-smoke.sh — We spin up the docker compose stack (Postgres + backup job + MinIO), seed the demo bucket,
 # trigger a backup, and then exercise the restore flow against the locally stored dump. Running this script gives us
 # confidence that the full pipeline still works without touching a real S3 account.
 #
-# Usage: scripts/dev-smoke.sh
+# Usage: scripts/full-stack-smoke.sh
 #
 set -euo pipefail
 
