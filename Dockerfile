@@ -24,8 +24,11 @@ ENV SCHEDULE=""
 ENV BACKUP_KEEP_DAYS=""
 
 ADD src/run.sh run.sh
+ADD src/healthcheck.sh healthcheck.sh
 ADD src/env.sh env.sh
 ADD src/backup.sh backup.sh
 ADD src/restore.sh restore.sh
+
+HEALTHCHECK --interval=60s --timeout=5s --start-period=10s --retries=3 CMD sh /healthcheck.sh
 
 CMD ["sh", "run.sh"]

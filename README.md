@@ -88,6 +88,15 @@ The `githooks/pre-push` script delegates to `scripts/build-image.sh`, so local p
 breaks. A scheduled GitHub Actions workflow (`Monitor Postgres 18 Client`) also polls the Alpine package index; when
 `postgresql18-client` finally ships, it opens a tracking issue so we remember to expand CI back to Postgres 18.
 
+When the container starts with a non-empty `SCHEDULE`, we automatically run `supercronic -test` before handing control to
+the scheduler. If the cron line is invalid, the container exits with a clear error so we can fix the cadence before
+production runs. Run `scripts/validate-schedule.sh` to rehearse that behaviour locally: it spin ups the image with `@daily`,
+waits for the `crontab is valid` log, then re-runs with a bogus schedule expecting a failure.
+
+By default supercronic listens on `127.0.0.1:9746`, so `/metrics` and `/health` stay inside the container. Set
+`SUPERCRONIC_PROMETHEUS_LISTEN_ADDRESS` to another host (for example `0.0.0.0:9746`) when you want to expose them and curl
+`http://<host>:9746/metrics` or `/health`.
+
 ### End-to-end smoke test (no real S3 required)
 
 Run `scripts/full-stack-smoke.sh` to spin up Postgres, a MinIO S3-compatible target, and the backup job via `docker compose`.
@@ -159,6 +168,10 @@ Key environment variables the stack understands:
 - `SCHEDULE` — supercronic cadence for automated backups. Leave blank for manual runs only.
 - `BACKUP_KEEP_DAYS` — optional pruning window. Empty skips deletion.
 - `PASSPHRASE` — enables GPG encryption of dumps when set.
+- `SUPERCRONIC_PROMETHEUS_LISTEN_ADDRESS` — defaults to `127.0.0.1:9746` (internal-only). Set to another host such as
+  `0.0.0.0:9746` when you want Prometheus to scrape from outside the container.
+- `SUPERCRONIC_SPLIT_LOGS` — set to `yes` to send stdout/stderr through supercronic's split logging mode.
+- `SUPERCRONIC_DEBUG` — set to `yes` when you want verbose cron logging during investigations.
 - `MINIO_IMAGE`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` — control which MinIO build runs in the dev stack and with which
   credentials; adjust them to mirror production S3 credentials if desired.
 
