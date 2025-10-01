@@ -7,7 +7,8 @@
 # Usage: scripts/full-stack-smoke.sh
 #
 # We align with POSIX strict mode (`-e` and `-u`) everywhere, and we enable `pipefail` when the shell supports it so
-# pipelines behave consistently without breaking environments that only ship POSIX `sh`.
+# pipelines behave consistently without breaking environments that only ship POSIX `sh`. We do the probe inside a
+# subshell because dash (GitHub Actions' /bin/sh) exits before any `|| true` fallback when `-e` is already active.
 set -u
 if (set -o pipefail) 2>/dev/null; then
   set -o pipefail

@@ -5,7 +5,8 @@
 # version drifts or missing checksums before we share changes.
 #
 # We keep strict mode on so the build check fails fast: we enable `-u` immediately, turn on `pipefail` when the shell
-# supports it, and finish by activating `-e` so the script stops on the first failure.
+# supports it, and finish by activating `-e` so the script stops on the first failure. We probe `pipefail` in a subshell
+# because dash (the /bin/sh on GitHub Actions) exits before it reaches a trailing `|| true` whenever `-e` is already set.
 set -u
 if (set -o pipefail) 2>/dev/null; then
   set -o pipefail

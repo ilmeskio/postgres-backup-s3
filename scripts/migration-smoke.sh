@@ -7,7 +7,8 @@
 # Usage: FROM_VERSION=15 TO_VERSION=16 scripts/migration-smoke.sh
 #
 # We keep POSIX strict mode engaged (`-e` and `-u`) and try to enable `pipefail` when the shell offers it, giving our
-# pipelines consistent failure behavior without surprising environments that run BusyBox or dash.
+# pipelines consistent failure behavior without surprising environments that run BusyBox or dash. We check support in a
+# subshell because dash (the /bin/sh on GitHub Actions) aborts before a trailing `|| true` whenever `-e` is already set.
 set -u
 if (set -o pipefail) 2>/dev/null; then
   set -o pipefail
