@@ -10,13 +10,9 @@ if [ ! -f "$cronfile" ]; then
   exit 1
 fi
 
-listen="${SUPERCRONIC_PROMETHEUS_LISTEN_ADDRESS:-0.0.0.0:9746}"
-host="${listen%%:*}"
-port="${listen##*:}"
-if [ -z "$host" ] || [ "$host" = "0.0.0.0" ]; then
-  host=127.0.0.1
-fi
-if curl -fsS "http://$host:$port/health" >/dev/null; then
+HOST=127.0.0.1
+PORT=9746
+if curl -fsS "http://$HOST:$PORT/health" >/dev/null; then
   exit 0
 fi
 

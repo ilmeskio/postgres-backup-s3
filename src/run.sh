@@ -17,13 +17,11 @@ else
     printf '%s /bin/sh /backup.sh\n' "$SCHEDULE"
   } >"$tmp_cron"
   mv "$tmp_cron" "$cronfile"
-  prometheus_listen="${SUPERCRONIC_PROMETHEUS_LISTEN_ADDRESS:-0.0.0.0:9746}"
-
   # We build the supercronic command incrementally so every flag we optionally add is reused for validation and execution.
   set -- supercronic
 
-  # Metrics are always available locally; the host can invert the address when it wants to expose them externally.
-  set -- "$@" -prometheus-listen-address "$prometheus_listen"
+  # Metrics and health checks bind to the container's interface at a fixed port so orchestrators can rely on it.
+  set -- "$@" -prometheus-listen-address 0.0.0.0:9746
 
   if [ "${SUPERCRONIC_SPLIT_LOGS:-}" = "yes" ]; then
     # We let logs split across stdout/stderr when folks want finer-grained log routing.
