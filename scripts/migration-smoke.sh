@@ -6,7 +6,10 @@
 #
 # Usage: FROM_VERSION=15 TO_VERSION=16 scripts/migration-smoke.sh
 #
-set -euo pipefail
+# We keep POSIX strict mode engaged (`-e` and `-u`) and try to enable `pipefail` when the shell offers it, giving our
+# pipelines consistent failure behavior without surprising environments that run BusyBox or dash.
+set -eu
+set -o pipefail 2>/dev/null || true
 
 # If teammates already keep a .env in place (copied from .env.development), we reuse it so docker compose picks up
 # their preferred credentials, bucket, or image overrides. We temporarily export everything to make sure our shell

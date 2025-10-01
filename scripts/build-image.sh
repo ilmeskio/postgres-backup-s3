@@ -5,8 +5,9 @@
 # version drifts or missing checksums before we share changes.
 #
 # We keep strict mode on so the build check fails fast: `-e` stops on docker errors, `-u` catches missing env vars,
-# and `-o pipefail` surfaces issues in piped commands during the compose build.
-set -euo pipefail
+# and (when supported) `-o pipefail` surfaces issues in piped commands during the compose build.
+set -eu
+set -o pipefail 2>/dev/null || true
 
 # When a .env file exists (e.g., copied from .env.development) we load it so docker compose and this script share
 # the same defaults.
