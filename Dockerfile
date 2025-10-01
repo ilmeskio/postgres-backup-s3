@@ -1,4 +1,11 @@
 ARG ALPINE_VERSION=3.20
+#
+# We build the runtime on top of the requested Alpine release so we can test
+# multiple combinations locally and publish matching image tags downstream.
+# Every build goes through install.sh, which expects TARGETARCH, POSTGRES_VERSION,
+# and the SUPERCRONIC_SHA1SUM for the platform-specific binary. We declare the
+# args here so docker compose (and manual builds) can override them without
+# editing this file.
 FROM alpine:${ALPINE_VERSION}
 ARG TARGETARCH
 ARG POSTGRES_VERSION

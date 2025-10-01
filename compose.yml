@@ -1,17 +1,30 @@
-# this file is here to facilitate development/testing
-# $ docker compose up -d --build --force-recreate
+# Development harness:
+#   1. `cp .env.development .env`
+#   2. `docker compose up -d --build --force-recreate`
+# This rebuilds the image (using the current Dockerfile) and runs the backup
+# pipeline against a disposable Postgres + MinIO stack. The services below are
+# intentionally minimal—use `.env` to tweak versions or credentials before
+# running the smoke test.
 
 services:
+  # We run a tiny Postgres instance so we can exercise backups end to end.
+  # Version is configurable through POSTGRES_VERSION, letting us mirror the
+  # client we compile into the image and try new majors without rewriting this file.
   postgres:
     image: "postgres:${POSTGRES_VERSION:-16}"
     environment:
+      # We use a demo credential set; feel free to override in .env when pointing at a real instance.
       POSTGRES_USER: "${POSTGRES_USER:-user}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-password}"
 
+  # MinIO stands in for S3 during development. We map the console out to 9001 so
+  # teammates can inspect objects, and the root credentials live in env vars for
+  # quick overrides when someone wants to test with real S3 keys.
   minio:
     image: "${MINIO_IMAGE:-minio/minio:RELEASE.2025-09-07T16-13-09Z-cpuv1}"
     command: server /data --console-address :9001
     environment:
+      # These defaults match the MinIO quickstart so we can log in locally; change them if you bring your own credentials.
       MINIO_ROOT_USER: "${MINIO_ROOT_USER:-minioadmin}"
       MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-minioadmin}"
     ports:
@@ -20,6 +33,10 @@ services:
     volumes:
       - minio-data:/data
 
+  # The backup service is our image under development. docker compose injects
+  # the build args defined in Dockerfile so install.sh picks the proper
+  # Postgres client and supercronic binary. The environment section mirrors what
+  # production orchestrators will set, making the smoke test realistic.
   backup:
     build:
       context: .
@@ -28,19 +45,24 @@ services:
         POSTGRES_VERSION: "${POSTGRES_VERSION:-16}"
         SUPERCRONIC_SHA1SUM: "${SUPERCRONIC_SHA1SUM:-}"
     environment:
-      SCHEDULE: "${SCHEDULE:-@weekly}" # optional
-      BACKUP_KEEP_DAYS: "${BACKUP_KEEP_DAYS:-7}" # optional
+      # Cron expression understood by supercronic; we default to @weekly so the container stays quiet during dev.
+      SCHEDULE: "${SCHEDULE:-@weekly}"
+      # Number of days to keep backups when pruning via AWS CLI; empty disables pruning.
+      BACKUP_KEEP_DAYS: "${BACKUP_KEEP_DAYS:-7}"
+      # Region/endpoint/credentials describe where we send the dumps; MinIO defaults keep everything local.
       S3_REGION: "${S3_REGION:-us-east-1}"
-      S3_ACCESS_KEY_ID: "${S3_ACCESS_KEY_ID:-minioadmin}"
-      S3_SECRET_ACCESS_KEY: "${S3_SECRET_ACCESS_KEY:-minioadmin}"
-      S3_BUCKET: "${S3_BUCKET:-demo-backups}"
-      S3_PREFIX: "${S3_PREFIX:-backup}"
       S3_ENDPOINT: "${S3_ENDPOINT:-http://minio:9000}"
       S3_S3V4: "${S3_S3V4:-yes}"
+      S3_BUCKET: "${S3_BUCKET:-demo-backups}"
+      S3_PREFIX: "${S3_PREFIX:-backup}"
+      S3_ACCESS_KEY_ID: "${S3_ACCESS_KEY_ID:-minioadmin}"
+      S3_SECRET_ACCESS_KEY: "${S3_SECRET_ACCESS_KEY:-minioadmin}"
+      # Postgres connection info matches the companion container by default but can point anywhere reachable.
       POSTGRES_HOST: "${POSTGRES_HOST:-postgres}"
       POSTGRES_DATABASE: "${POSTGRES_DATABASE:-postgres}"
       POSTGRES_USER: "${POSTGRES_USER:-user}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-password}"
+      # Optional passphrase turns on GPG encryption; leave blank to store plain dumps.
       PASSPHRASE: "${PASSPHRASE:-}"
     depends_on:
       - postgres
