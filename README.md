@@ -66,7 +66,7 @@ Also thanks to [siemens/postgres-backup-s3](https://github.com/siemens/postgres-
 See [Repository Guidelines](AGENTS.md) for contributor and workflow expectations.
 
 
-## TODO
-[] add testing to ensure correct build and backup with restore
-[] walkthough for version upgrade
+## Goals
+[ ] add testing to ensure correct build and backup with restore
+[ ] walkthough for version upgrade
 [x] leverages https://github.com/aptible/supercronic?tab=readme-ov-file for cron instead of go-cron
