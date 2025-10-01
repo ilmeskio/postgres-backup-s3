@@ -18,17 +18,16 @@ jobs:
       matrix:
         include:
           - pg_version: 14
-            # Alpine 3.19 ships postgresql14-client; newer bases dropped it from main.
-            alpine_version: "3.19"
+            # Alpine 3.20 still ships postgresql14-client, so we build on that baseline.
+            alpine_version: "3.20"
           - pg_version: 15
-            # The postgresql15-client package also only exists through Alpine 3.19.
-            alpine_version: "3.19"
+            # Alpine 3.20 carries postgresql15-client as well, keeping the matrix consistent with local defaults.
+            alpine_version: "3.20"
           - pg_version: 16
             alpine_version: "3.20"
           - pg_version: 17
             alpine_version: "3.21"
-          - pg_version: 18
-            alpine_version: "3.22"
+          # We skip Postgres 18 for now because Alpine 3.22 does not yet publish postgresql18-client.
     steps:
       # We fetch the latest commit so every following step has the source we want to validate.
       - name: Checkout
@@ -61,20 +60,13 @@ jobs:
             to: 16
           - from: 14
             to: 17
-          - from: 14
-            to: 18
           - from: 15
             to: 16
           - from: 15
             to: 17
-          - from: 15
-            to: 18
           - from: 16
             to: 17
-          - from: 16
-            to: 18
-          - from: 17
-            to: 18
+          # We skip Postgres 18 migrations until Alpine publishes client packages for that major.
     steps:
       # We pull the repository again so this job has a clean workspace tied to the migration matrix entry.
       - name: Checkout
