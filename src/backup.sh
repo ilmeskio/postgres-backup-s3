@@ -8,6 +8,10 @@ set -euo pipefail
 # We load env.sh so our validation and shared AWS configuration apply consistently in backups and restores.
 . ./env.sh
 
+# We treat optional inputs as empty strings when not provided so `set -u` does not abort.
+PASSPHRASE="${PASSPHRASE:-}"
+BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-}"
+
 echo "Creating backup of $POSTGRES_DATABASE database..."
 pg_dump --format=custom \
         -h $POSTGRES_HOST \

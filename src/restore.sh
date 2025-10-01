@@ -8,6 +8,9 @@ set -euo pipefail
 # We source env.sh to reuse the same validation and AWS settings the backup flow relies on.
 . ./env.sh
 
+# Optional inputs might be unset when we're running without encryption.
+PASSPHRASE="${PASSPHRASE:-}"
+
 s3_uri_base="s3://${S3_BUCKET}/${S3_PREFIX}"
 
 if [ -z "$PASSPHRASE" ]; then

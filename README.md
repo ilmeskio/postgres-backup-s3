@@ -84,6 +84,13 @@ $ git config core.hooksPath githooks
 The `githooks/pre-push` script delegates to `scripts/test-local.sh`, so local pushes will fail fast whenever the image
 breaks.
 
+### End-to-end smoke test (no real S3 required)
+
+Run `scripts/dev-smoke.sh` to spin up Postgres, a MinIO S3-compatible target, and the backup job via `docker compose`.
+The script seeds a demo bucket (`demo-backups`), performs a backup, and immediately restores it to verify the entire
+flow. MinIO exposes a local console at http://localhost:9001 if you want to inspect objects, and all traffic stays on
+your machine.
+
 
 ## Goals
 [ ] add testing to ensure correct build and backup with restore
