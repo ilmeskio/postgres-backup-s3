@@ -92,8 +92,9 @@ flow. MinIO exposes a local console at http://localhost:9001 if you want to insp
 your machine.
 
 Copy `.env.development` to `.env` before running the compose stack so the build and runtime variables have sensible
-defaults. Tweak the values (especially `SUPERCRONIC_SHA1SUM` for your architecture) whenever you want to test a new
-Postgres or Alpine combination. (The file only contains public demo credentials—swap them before pointing at a real S3.)
+defaults. Tweak the values (especially `SUPERCRONIC_SHA1SUM` for your architecture or `MINIO_IMAGE` when pinning a new
+release) whenever you want to test a different combination. The file only contains public demo credentials—swap them
+before pointing at a real S3.
 
 
 ## Goals
