@@ -5,12 +5,25 @@
 # can catch version drifts or missing checksums before we share changes.
 #
 # We keep strict mode on so the build check fails fast: `-e` stops on docker errors, `-u` catches missing env vars,
-# and `-o pipefail` surfaces issues in piped commands like the checksum verification.
+# and `-o pipefail` surfaces issues in piped commands during the compose build.
 set -euo pipefail
 
-# We ensure Docker is available before we do anything costly so teammates see a clear message instead of a stack trace.
+# When a .env file exists (e.g., copied from .env.development) we load it so docker compose and this script share
+# the same defaults.
+if [ -f .env ]; then
+  set -a
+  . ./.env
+  set +a
+fi
+
+# We ensure Docker (and docker compose) are available before we do anything costly so teammates see a clear message
+# instead of a stack trace.
 if ! command -v docker >/dev/null 2>&1; then
   echo "ERROR: docker is not on PATH; please install Docker Desktop or the CLI." >&2
+  exit 1
+fi
+if ! docker compose version >/dev/null 2>&1; then
+  echo "ERROR: docker compose plugin not found; make sure you're on a recent Docker installation." >&2
   exit 1
 fi
 
@@ -44,12 +57,11 @@ ALPINE_VERSION="${ALPINE_VERSION:-3.20}"
 POSTGRES_VERSION="${POSTGRES_VERSION:-16}"
 SUPERCRONIC_SHA1SUM="${SUPERCRONIC_SHA1SUM:-$default_supercronic_sha}"
 
-# We let folks confirm what is about to happen, celebrating that the hook is doing real validation for us.
-echo "Running docker build with ALPINE_VERSION=${ALPINE_VERSION}, POSTGRES_VERSION=${POSTGRES_VERSION}, SUPERCRONIC_SHA1SUM=${SUPERCRONIC_SHA1SUM}"
+export ALPINE_VERSION POSTGRES_VERSION SUPERCRONIC_SHA1SUM
 
-# We trigger the build without tagging so the working tree stays clean; docker build caches layers, keeping reruns fast for us.
-docker build \
-  --build-arg "ALPINE_VERSION=${ALPINE_VERSION}" \
-  --build-arg "POSTGRES_VERSION=${POSTGRES_VERSION}" \
-  --build-arg "SUPERCRONIC_SHA1SUM=${SUPERCRONIC_SHA1SUM}" \
-  .
+# We let folks confirm what is about to happen, celebrating that the hook is doing real validation for us.
+echo "Running docker compose build for backup with ALPINE_VERSION=${ALPINE_VERSION}, POSTGRES_VERSION=${POSTGRES_VERSION}, SUPERCRONIC_SHA1SUM=${SUPERCRONIC_SHA1SUM}"
+
+# Compose picks up the build arguments declared in Dockerfile via these environment variables, giving us the same build
+# path the smoke test uses without bringing the entire stack online.
+docker compose build backup

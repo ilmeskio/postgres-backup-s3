@@ -69,9 +69,10 @@ See [Repository Guidelines](AGENTS.md) for contributor and workflow expectations
 
 ### Local verification
 
-Run `scripts/test-local.sh` to confirm the Docker image still builds before sharing a branch. The helper picks
-architecture-aware defaults (`ALPINE_VERSION=3.20`, `POSTGRES_VERSION=16`, and the matching supercronic checksum), while
-allowing overrides through environment variables when we want to experiment:
+Run `scripts/test-local.sh` to confirm the Docker image still builds before sharing a branch. The helper loads `.env`
+when present, picks architecture-aware defaults (`ALPINE_VERSION=3.20`, `POSTGRES_VERSION=16`, and the matching
+supercronic checksum), and runs `docker compose build backup` so the result mirrors our smoke test build. Override any
+of the knobs through environment variables when you want to experiment:
 
 ```sh
 $ ALPINE_VERSION=3.19 POSTGRES_VERSION=15 scripts/test-local.sh
