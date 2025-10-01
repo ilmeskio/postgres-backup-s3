@@ -17,7 +17,7 @@ else
     printf '%s /bin/sh /backup.sh\n' "$SCHEDULE"
   } >"$tmp_cron"
   mv "$tmp_cron" "$cronfile"
-  prometheus_listen="${SUPERCRONIC_PROMETHEUS_LISTEN_ADDRESS:-127.0.0.1:9746}"
+  prometheus_listen="${SUPERCRONIC_PROMETHEUS_LISTEN_ADDRESS:-0.0.0.0:9746}"
 
   # We build the supercronic command incrementally so every flag we optionally add is reused for validation and execution.
   set -- supercronic

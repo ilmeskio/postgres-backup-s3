@@ -93,9 +93,9 @@ the scheduler. If the cron line is invalid, the container exits with a clear err
 production runs. Run `scripts/validate-schedule.sh` to rehearse that behaviour locally: it spin ups the image with `@daily`,
 waits for the `crontab is valid` log, then re-runs with a bogus schedule expecting a failure.
 
-By default supercronic listens on `127.0.0.1:9746`, so `/metrics` and `/health` stay inside the container. Set
-`SUPERCRONIC_PROMETHEUS_LISTEN_ADDRESS` to another host (for example `0.0.0.0:9746`) when you want to expose them and curl
-`http://<host>:9746/metrics` or `/health`.
+By default supercronic listens on `0.0.0.0:9746`, so `/metrics` and `/health` are immediately available for Prometheus.
+Use `docker run -p 9746:9746 ...` (or the compose equivalent) when you want to scrape from outside; override
+`SUPERCRONIC_PROMETHEUS_LISTEN_ADDRESS` if you need a different port.
 
 ### End-to-end smoke test (no real S3 required)
 
@@ -168,8 +168,8 @@ Key environment variables the stack understands:
 - `SCHEDULE` — supercronic cadence for automated backups. Leave blank for manual runs only.
 - `BACKUP_KEEP_DAYS` — optional pruning window. Empty skips deletion.
 - `PASSPHRASE` — enables GPG encryption of dumps when set.
-- `SUPERCRONIC_PROMETHEUS_LISTEN_ADDRESS` — defaults to `127.0.0.1:9746` (internal-only). Set to another host such as
-  `0.0.0.0:9746` when you want Prometheus to scrape from outside the container.
+- `SUPERCRONIC_PROMETHEUS_LISTEN_ADDRESS` — defaults to `0.0.0.0:9746` so `/metrics` and `/health` are exposed. Point it to
+  another address/port when you need a different binding.
 - `SUPERCRONIC_SPLIT_LOGS` — set to `yes` to send stdout/stderr through supercronic's split logging mode.
 - `SUPERCRONIC_DEBUG` — set to `yes` when you want verbose cron logging during investigations.
 - `MINIO_IMAGE`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD` — control which MinIO build runs in the dev stack and with which
