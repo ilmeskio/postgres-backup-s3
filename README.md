@@ -91,6 +91,10 @@ The script seeds a demo bucket (`demo-backups`), performs a backup, and immediat
 flow. MinIO exposes a local console at http://localhost:9001 if you want to inspect objects, and all traffic stays on
 your machine.
 
+Copy `.env.development` to `.env` before running the compose stack so the build and runtime variables have sensible
+defaults. Tweak the values (especially `SUPERCRONIC_SHA1SUM` for your architecture) whenever you want to test a new
+Postgres or Alpine combination. (The file only contains public demo credentials—swap them before pointing at a real S3.)
+
 
 ## Goals
 [ ] add testing to ensure correct build and backup with restore

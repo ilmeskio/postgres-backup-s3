@@ -8,6 +8,15 @@
 #
 set -euo pipefail
 
+# If a .env file exists (e.g., copied from .env.development), we load it so the script and
+# docker compose share the same configuration. We temporarily mark variables for export so
+# downstream commands inherit them.
+if [ -f .env ]; then
+  set -a
+  . ./.env
+  set +a
+fi
+
 # We check for docker compose support up front so teammates see actionable guidance instead of a shell error later on.
 if ! command -v docker >/dev/null 2>&1; then
   echo "ERROR: docker command not found; please install Docker Desktop or the CLI." >&2
