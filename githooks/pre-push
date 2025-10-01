@@ -5,10 +5,13 @@
 # reusable when teammates want to run checks by hand or compare against CI.
 #
 # We rely on strict mode so the hook stops the push whenever something fails (`-e`), whenever a variable is
-# missing (`-u`), or whenever a pipeline component exits non-zero (`-o pipefail`). The trio keeps our guardrail
-# honest even when helpers chain commands, and we fall back gracefully when the shell only implements POSIX `sh`.
-set -eu
-set -o pipefail 2>/dev/null || true
+# missing (`-u`), or whenever a pipeline component exits non-zero (`-o pipefail`). The trio keeps our guardrail honest,
+# and we fall back gracefully when the shell only implements POSIX `sh`.
+set -u
+if (set -o pipefail) 2>/dev/null; then
+  set -o pipefail
+fi
+set -e
 
 # We locate the repository root so the hook still works if Git executes us from .git/hooks when core.hooksPath is not set.
 repo_root="$(git rev-parse --show-toplevel)"

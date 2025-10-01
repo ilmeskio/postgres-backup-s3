@@ -8,8 +8,11 @@
 #
 # We align with POSIX strict mode (`-e` and `-u`) everywhere, and we enable `pipefail` when the shell supports it so
 # pipelines behave consistently without breaking environments that only ship POSIX `sh`.
-set -eu
-set -o pipefail 2>/dev/null || true
+set -u
+if (set -o pipefail) 2>/dev/null; then
+  set -o pipefail
+fi
+set -e
 
 # If a .env file exists (e.g., copied from .env.development), we load it so the script and
 # docker compose share the same configuration. We temporarily mark variables for export so
