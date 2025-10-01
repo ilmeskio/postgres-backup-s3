@@ -85,7 +85,8 @@ $ git config core.hooksPath githooks
 ```
 
 The `githooks/pre-push` script delegates to `scripts/build-image.sh`, so local pushes will fail fast whenever the image
-breaks.
+breaks. A scheduled GitHub Actions workflow (`Monitor Postgres 18 Client`) also polls the Alpine package index; when
+`postgresql18-client` finally ships, it opens a tracking issue so we remember to expand CI back to Postgres 18.
 
 ### End-to-end smoke test (no real S3 required)
 

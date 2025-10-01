@@ -1,0 +1,96 @@
+# We run this scheduled check to spot when Alpine finally ships postgresql18-client.
+# Once the package becomes available we automatically open a tracking issue so we can re-enable
+# Postgres 18 coverage in the main CI matrix.
+name: Monitor Postgres 18 Client
+
+on:
+  schedule:
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+
+jobs:
+  check-package:
+    name: Check Alpine package availability
+    runs-on: ubuntu-latest
+    steps:
+      # We fetch the package metadata across the branches we care about and record the first hit.
+      - name: Probe Alpine package indexes
+        id: probe
+        env:
+          BRANCHES: >-
+            edge v3.22
+        run: |
+          set -u
+          if (set -o pipefail) 2>/dev/null; then
+            set -o pipefail
+          fi
+          set -e
+
+          found="false"
+          selected_branch=""
+          selected_url=""
+
+          for branch in $BRANCHES; do
+            if [ "$branch" = "edge" ]; then
+              url="https://pkgs.alpinelinux.org/package/edge/main/x86_64/postgresql18-client"
+            else
+              version="${branch#v}"
+              url="https://pkgs.alpinelinux.org/package/${version}/main/x86_64/postgresql18-client"
+            fi
+
+            status="$(curl -s -o /dev/null -w "%{http_code}" "$url" || echo "000")"
+            echo "Checked $url -> $status"
+
+            if [ "$status" = "200" ]; then
+              found="true"
+              selected_branch="$branch"
+              selected_url="$url"
+              break
+            fi
+          done
+
+          echo "available=$found" >> "$GITHUB_OUTPUT"
+          if [ "$found" = "true" ]; then
+            echo "branch=$selected_branch" >> "$GITHUB_OUTPUT"
+            echo "url=$selected_url" >> "$GITHUB_OUTPUT"
+          fi
+
+      # When Alpine finally adds the package we create (or reuse) a tracking issue.
+      - name: Open tracking issue
+        if: steps.probe.outputs.available == 'true'
+        uses: actions/github-script@v6
+        env:
+          PACKAGE_BRANCH: ${{ steps.probe.outputs.branch }}
+          PACKAGE_URL: ${{ steps.probe.outputs.url }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const branch = process.env.PACKAGE_BRANCH;
+            const url = process.env.PACKAGE_URL;
+            const title = `Alpine ${branch} publishes postgresql18-client`;
+            const body = `Alpine branch **${branch}** now exposes [postgresql18-client](${url}).\n\n- [ ] Update CI matrix to re-enable Postgres 18 builds\n- [ ] Revisit migration smoke coverage for Postgres 18\n- [ ] Bump documentation references`; 
+
+            const {owner, repo} = context.repo;
+
+            const {data: issues} = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: 'open',
+              per_page: 100
+            });
+
+            const existing = issues.find(issue => issue.title === title);
+
+            if (existing) {
+              core.info(`Issue already open at ${existing.html_url}`);
+              return;
+            }
+
+            const created = await github.rest.issues.create({
+              owner,
+              repo,
+              title,
+              body
+            });
+
+            core.info(`Opened issue ${created.data.html_url}`);
