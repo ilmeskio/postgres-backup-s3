@@ -65,6 +65,25 @@ Also thanks to [siemens/postgres-backup-s3](https://github.com/siemens/postgres-
 ## Contributing
 See [Repository Guidelines](AGENTS.md) for contributor and workflow expectations.
 
+### Local verification
+
+Run `scripts/test-local.sh` to confirm the Docker image still builds before sharing a branch. The helper picks
+architecture-aware defaults (`ALPINE_VERSION=3.20`, `POSTGRES_VERSION=16`, and the matching supercronic checksum), while
+allowing overrides through environment variables when we want to experiment:
+
+```sh
+$ ALPINE_VERSION=3.19 POSTGRES_VERSION=15 scripts/test-local.sh
+```
+
+To run the check automatically on every push, point Git hooks to the provided scripts:
+
+```sh
+$ git config core.hooksPath githooks
+```
+
+The `githooks/pre-push` script delegates to `scripts/test-local.sh`, so local pushes will fail fast whenever the image
+breaks.
+
 
 ## Goals
 [ ] add testing to ensure correct build and backup with restore

@@ -1,0 +1,12 @@
+#!/bin/sh
+#
+# pre-push — We call our local test harness before any push so every branch carries a Docker image that builds cleanly.
+# The hook simply routes to scripts/test-local.sh, keeping the logic reusable when teammates want to run checks by hand.
+#
+set -euo pipefail
+
+# We locate the repository root so the hook still works if Git executes us from .git/hooks when core.hooksPath is not set.
+repo_root="$(git rev-parse --show-toplevel)"
+
+# We defer to the shared test script so all validation lives in one place.
+"${repo_root}/scripts/test-local.sh"
