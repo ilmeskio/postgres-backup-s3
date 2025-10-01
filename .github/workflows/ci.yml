@@ -72,42 +72,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # We calculate the Alpine image that matches the highest version in play so both containers share compatible tooling.
-      - name: Configure migration inputs
-        run: |
-          # We fail fast inside this helper script so a misconfiguration stops the matrix entry immediately.
-          set -e
-          # We read the matrix versions and keep them in named variables for clarity later in the script.
-          from="${{ matrix.from }}"
-          to="${{ matrix.to }}"
-          # We compare the versions so we can pick an Alpine release that meets the stricter requirement of the two.
-          if [ "$from" -gt "$to" ]; then
-            max="$from"
-          else
-            max="$to"
-          fi
-          # We branch on the highest version so we always pair each migration with a tested Alpine base.
-          case "$max" in
-            18)
-              alpine=3.22
-              ;;
-            17)
-              alpine=3.21
-              ;;
-            *)
-              alpine=3.20
-              ;;
-          esac
-          # We persist the chosen Alpine version so later steps build matching containers.
-          echo "ALPINE_VERSION=$alpine" >> "$GITHUB_ENV"
-          # We record the origin version so the smoke test knows which dump to create.
-          echo "FROM_VERSION=$from" >> "$GITHUB_ENV"
-          # We log the destination version so the smoke test upgrades to the right target.
-          echo "TO_VERSION=$to" >> "$GITHUB_ENV"
-
       # We run the smoke test so we can confirm that upgrades, dumps, and restores succeed for this pair.
       - name: Run migration smoke
-        run: FROM_VERSION="$FROM_VERSION" TO_VERSION="$TO_VERSION" scripts/migration-smoke.sh
+        env:
+          FROM_VERSION: ${{ matrix.from }}
+          TO_VERSION: ${{ matrix.to }}
+        run: scripts/migration-smoke.sh
 
   # We assemble multi-architecture images so our releases work on both AMD64 and ARM64 builders.
   multi-arch-image:

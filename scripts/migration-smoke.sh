@@ -43,6 +43,11 @@ if [ "$FROM_VERSION" = "$TO_VERSION" ]; then
   exit 1
 fi
 
+# Folks can override the Alpine base explicitly (e.g., FROM_ALPINE_VERSION=3.19) when testing edge cases. When unset,
+# we compute the right release for each Postgres major so apk can still install the matching client tools.
+FROM_ALPINE_VERSION="${FROM_ALPINE_VERSION:-}"
+TO_ALPINE_VERSION="${TO_ALPINE_VERSION:-}"
+
 # We reuse compose so we do not have to repeat the long command each time. The script keeps MinIO's bucket stable,
 # but we scope backups to a dedicated prefix so we never trample other test data in the bucket teammates might keep around.
 COMPOSE="docker compose"
@@ -91,11 +96,17 @@ fi
 # We remember the caller's Postgres version so we can hand it back once we are done. That way running this script does
 # not leave the environment in a surprising state for the next command they run.
 ORIGINAL_POSTGRES_VERSION="${POSTGRES_VERSION:-}"
+ORIGINAL_ALPINE_VERSION="${ALPINE_VERSION:-}"
 restore_env() {
   if [ -n "$ORIGINAL_POSTGRES_VERSION" ]; then
     export POSTGRES_VERSION="$ORIGINAL_POSTGRES_VERSION"
   else
     unset POSTGRES_VERSION || true
+  fi
+  if [ -n "$ORIGINAL_ALPINE_VERSION" ]; then
+    export ALPINE_VERSION="$ORIGINAL_ALPINE_VERSION"
+  else
+    unset ALPINE_VERSION || true
   fi
   if [ "$ORIGINAL_S3_BUCKET_DEFINED" -eq 1 ]; then
     export S3_BUCKET="$ORIGINAL_S3_BUCKET"
@@ -124,11 +135,57 @@ fetch_note() {
     -c "SELECT note FROM migration_notes ORDER BY id DESC LIMIT 1;"
 }
 
+# We map Postgres majors to the newest Alpine release that still ships the corresponding client package.
+resolve_alpine_version() {
+  version="$1"
+  case "$version" in
+    14|15|16)
+      echo "3.20"
+      ;;
+    17)
+      echo "3.21"
+      ;;
+    18)
+      echo "3.22"
+      ;;
+    *)
+      echo "3.20"
+      ;;
+  esac
+}
+
+# We set up the environment for each phase so docker compose rebuilds with the right Postgres + Alpine pairing.
+set_phase_context() {
+  phase="$1"
+  version="$2"
+  case "$phase" in
+    source)
+      custom="$FROM_ALPINE_VERSION"
+      ;;
+    target)
+      custom="$TO_ALPINE_VERSION"
+      ;;
+    *)
+      custom=""
+      ;;
+  esac
+
+  if [ -n "$custom" ]; then
+    alpine="$custom"
+  else
+    alpine="$(resolve_alpine_version "$version")"
+  fi
+
+  export POSTGRES_VERSION="$version"
+  export ALPINE_VERSION="$alpine"
+  echo "Preparing ${phase} phase with Postgres ${version} on Alpine ${alpine}."
+}
+
 # ---- phase 1: seed data on the source version ----
 #
 # We start from a clean stack, launch the services with the "from" Postgres image, and take a backup into our MinIO bucket.
 # The goal is to capture a dump that represents the state we need to carry forward.
-export POSTGRES_VERSION="$FROM_VERSION"
+set_phase_context source "$FROM_VERSION"
 $COMPOSE down >/dev/null 2>&1 || true
 $COMPOSE up -d --build --force-recreate
 wait_for_postgres
@@ -154,7 +211,7 @@ $COMPOSE exec -T backup sh backup.sh
 # We restart the stack with the target Postgres version so the restore runs against a fresh server. MinIO keeps the dump
 # because we avoided removing its named volume during the down/up dance.
 $COMPOSE down >/dev/null 2>&1 || true
-export POSTGRES_VERSION="$TO_VERSION"
+set_phase_context target "$TO_VERSION"
 $COMPOSE up -d --build --force-recreate
 wait_for_postgres
 

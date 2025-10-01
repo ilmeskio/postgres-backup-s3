@@ -111,6 +111,10 @@ command line:
 $ FROM_VERSION=14 TO_VERSION=16 scripts/migration-smoke.sh
 ```
 
+The script automatically pins each phase to the Alpine release that still ships the matching `postgresql*-client`
+packages, so migrations like `14 -> 17` rebuild with Alpine 3.20 first and 3.21 second. Set
+`FROM_ALPINE_VERSION`/`TO_ALPINE_VERSION` when you want to experiment with other bases.
+
 The script scopes its work to an S3 prefix named `migration-smoke`, so our habitual `full-stack-smoke.sh` runs keep their own
 objects untouched. Set `MIGRATION_PREFIX` when you want a different namespace, or flip `KEEP_STACK=1` to leave the stack
 running for follow-up exploration.
