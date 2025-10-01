@@ -99,6 +99,21 @@ defaults. Tweak the values (especially `SUPERCRONIC_SHA1SUM` for your architectu
 release) whenever you want to test a different combination. The file only contains public demo credentials—swap them
 before pointing at a real S3.
 
+### Major-version migration rehearsal
+
+Run `scripts/migration-smoke.sh` when we want to prove that a dump captured on one major Postgres release restores cleanly
+into a newer release. The helper backs up sample data on `FROM_VERSION` (default `15`), restarts the stack with
+`TO_VERSION` (default `16`), and restores the dump while MinIO keeps the archive available. Override the versions on the
+command line:
+
+```sh
+$ FROM_VERSION=14 TO_VERSION=16 scripts/migration-smoke.sh
+```
+
+The script scopes its work to an S3 prefix named `migration-smoke`, so our habitual `dev-smoke.sh` runs keep their own
+objects untouched. Set `MIGRATION_PREFIX` when you want a different namespace, or flip `KEEP_STACK=1` to leave the stack
+running for follow-up exploration.
+
 ### How the Dockerfile and compose stack fit together
 
 The Dockerfile mirrors the production image we publish: we declare build arguments for the Alpine base, the Postgres
