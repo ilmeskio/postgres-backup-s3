@@ -1,9 +1,12 @@
 #! /bin/sh
 
-set -u # `-e` omitted intentionally, but i can't remember why exactly :'(
-set -o pipefail
+# We run with strict mode so restores bail out as soon as something looks wrong—`-e` aborts on
+# failing commands (including AWS downloads), `-u` catches missing variables from env.sh, and
+# `-o pipefail` ensures pipeline errors (like `tail` not finding a key) bubble up for us to handle.
+set -euo pipefail
 
-source ./env.sh
+# We source env.sh to reuse the same validation and AWS settings the backup flow relies on.
+. ./env.sh
 
 s3_uri_base="s3://${S3_BUCKET}/${S3_PREFIX}"
 
@@ -18,12 +21,20 @@ if [ $# -eq 1 ]; then
   key_suffix="${POSTGRES_DATABASE}_${timestamp}${file_type}"
 else
   echo "Finding latest backup..."
-  key_suffix=$(
+  # We ask S3 for all matching backups, sort them, and grab the most recent key. `tail -n 1` exits with
+  # status 1 when the list is empty, so we append `|| true` to avoid tripping strict mode and then make
+  # the emptiness decision ourselves.
+  key_suffix=$( \
     aws $aws_args s3 ls "${s3_uri_base}/${POSTGRES_DATABASE}" \
       | sort \
       | tail -n 1 \
-      | awk '{ print $4 }'
-  )
+      | awk '{ print $4 }' \
+  ) || true
+
+  if [ -z "$key_suffix" ]; then
+    echo "ERROR: No backups found for ${POSTGRES_DATABASE}." >&2
+    exit 1
+  fi
 fi
 
 echo "Fetching backup from S3..."

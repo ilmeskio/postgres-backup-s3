@@ -2,7 +2,9 @@
 #
 # install.sh — installs pg_dump (psql), gpg, aws-cli, and supercronic on Alpine.
 #
-# We enable strict mode to fail on errors, unset vars, and pipeline issues.
+# We enable strict mode so we stop the build the moment something looks wrong—`set -e` fails on error,
+# `set -u` catches missing variables, and `set -o pipefail` surfaces pipeline issues that would otherwise be silent.
+# We also turn on `set -x` so every command we run is echoed, helping us and future teammates debug build logs quickly.
 set -euo pipefail
 set -x
 

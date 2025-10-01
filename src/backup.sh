@@ -1,9 +1,12 @@
 #! /bin/sh
 
-set -eu
-set -o pipefail
+# We keep strict mode on so backup failures never slip by unnoticed—`set -e` stops on the first
+# error, `set -u` flags missing inputs from env.sh, and `set -o pipefail` propagates pipeline
+# failures like an S3 upload hiccup.
+set -euo pipefail
 
-source ./env.sh
+# We load env.sh so our validation and shared AWS configuration apply consistently in backups and restores.
+. ./env.sh
 
 echo "Creating backup of $POSTGRES_DATABASE database..."
 pg_dump --format=custom \

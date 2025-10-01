@@ -3,6 +3,9 @@
 # pre-push — We call our local test harness before any push so every branch carries a Docker image that builds cleanly.
 # The hook simply routes to scripts/test-local.sh, keeping the logic reusable when teammates want to run checks by hand.
 #
+# We rely on strict mode so the hook stops the push whenever something fails (`-e`), whenever a variable is
+# missing (`-u`), or whenever a pipeline component exits non-zero (`-o pipefail`). The trio keeps our guardrail
+# honest even when helpers chain commands.
 set -euo pipefail
 
 # We locate the repository root so the hook still works if Git executes us from .git/hooks when core.hooksPath is not set.
