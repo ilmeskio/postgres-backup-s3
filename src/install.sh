@@ -19,8 +19,13 @@ SUPERCRONIC_VERSION="${SUPERCRONIC_VERSION:-0.2.36}"
 # If the supercronic project later publishes binaries for more architectures (e.g., ppc64le), we add another
 # pattern here so the right filename is selected—no repo branching required.
 case "$TARGETARCH" in
-  amd64|arm64) ARCH="$TARGETARCH" ;;
-  *) echo "Unsupported TARGETARCH: $TARGETARCH" >&2; exit 1 ;;
+  amd64|arm64)
+    ARCH="$TARGETARCH"
+    ;;
+  *)
+    echo "Unsupported TARGETARCH: $TARGETARCH" >&2
+    exit 1
+    ;;
 esac
 
 SUPERCRONIC_BIN="supercronic-linux-${ARCH}"
@@ -65,9 +70,19 @@ trap 'rm -rf "$tmpdir"' EXIT
 curl -fSL "$SUPERCRONIC_URL" -o "$tmpdir/$SUPERCRONIC_BIN"
 
 if [ -z "${SUPERCRONIC_SHA1SUM:-}" ]; then
-  echo "ERROR: SUPERCRONIC_SHA1SUM must be provided for ${SUPERCRONIC_BIN}." >&2
-  echo "Hint: export SUPERCRONIC_SHA1SUM for v${SUPERCRONIC_VERSION} or update install.sh defaults." >&2
-  exit 1
+  case "$TARGETARCH" in
+    amd64)
+      SUPERCRONIC_SHA1SUM=53a484404b0c559d64f78e9481a3ec22f782dc46
+      ;;
+    arm64)
+      SUPERCRONIC_SHA1SUM=58b3c15304e7b59fe7b9d66a2242f37e71cf7db6
+      ;;
+    *)
+      echo "ERROR: SUPERCRONIC_SHA1SUM must be provided for ${SUPERCRONIC_BIN}." >&2
+      echo "Hint: export SUPERCRONIC_SHA1SUM for v${SUPERCRONIC_VERSION} or update install.sh defaults." >&2
+      exit 1
+      ;;
+  esac
 fi
 
 # We build the expected checksum line (`<hash><two spaces><filename>`) and feed it into sha1sum.

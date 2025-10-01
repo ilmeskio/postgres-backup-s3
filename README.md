@@ -119,6 +119,16 @@ The script scopes its work to an S3 prefix named `migration-smoke`, so our habit
 objects untouched. Set `MIGRATION_PREFIX` when you want a different namespace, or flip `KEEP_STACK=1` to leave the stack
 running for follow-up exploration.
 
+### Publishing images
+
+We ship multi-architecture images to Docker Hub via the **Publish Images** GitHub Actions workflow. The job builds the
+supported Postgres majors (currently 14–17) for `linux/amd64` and `linux/arm64`, tags them as `ilmeskio/postgres-backup-s3:<major>`,
+and promotes the highest major to `latest`. Releases run automatically on tags matching `v*`; you can also launch the
+workflow manually and provide a custom `version_tag`.
+
+Before triggering a publish ensure the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` are configured with
+credentials that have push rights to the `ilmeskio/postgres-backup-s3` repository.
+
 ### How the Dockerfile and compose stack fit together
 
 The Dockerfile mirrors the production image we publish: we declare build arguments for the Alpine base, the Postgres

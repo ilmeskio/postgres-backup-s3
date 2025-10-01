@@ -1,0 +1,129 @@
+# We publish multi-architecture images to Docker Hub whenever we cut a release (v*) or run the workflow manually.
+# Each Postgres major gets its own tag (e.g., ilmeskio/postgres-backup-s3:16) and we promote the highest supported
+# version to `latest`. Additional tags include the release identifier (e.g., 2025.10.01) and the Alpine base for traceability.
+name: Publish Images
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'Version identifier (e.g., 2025.10.01). Leave empty when running from a tagged ref.'
+        required: false
+
+env:
+  DOCKER_IMAGE: ilmeskio/postgres-backup-s3
+  DEFAULT_SUPERCRONIC_VERSION: '0.2.36'
+
+jobs:
+  build-and-push:
+    name: Publish Postgres ${{ matrix.pg_version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pg_version: 14
+            alpine_version: 3.20
+            latest: false
+          - pg_version: 15
+            alpine_version: 3.20
+            latest: false
+          - pg_version: 16
+            alpine_version: 3.20
+            latest: false
+          - pg_version: 17
+            alpine_version: 3.21
+            latest: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Derive release identifier
+        id: version
+        run: |
+          ref_type="${GITHUB_REF_TYPE:-}"
+          ref_name="${GITHUB_REF_NAME:-}"
+          manual_input="${{ github.event.inputs.version_tag || '' }}"
+
+          if [ "$ref_type" = "tag" ] && [ -n "$ref_name" ]; then
+            version="$ref_name"
+          elif [ -n "$manual_input" ]; then
+            version="$manual_input"
+          else
+            echo "ERROR: Unable to determine release identifier. Provide version_tag when running manually." >&2
+            exit 1
+          fi
+
+          # Strip a leading 'v' so release tags like v2025.10.01 produce clean image tags.
+          version="${version#v}"
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push multi-arch image
+        env:
+          VERSION_TAG: ${{ steps.version.outputs.value }}
+          PG_VERSION: ${{ matrix.pg_version }}
+          ALPINE_VERSION: ${{ matrix.alpine_version }}
+          IS_DEFAULT: ${{ matrix.latest }}
+        run: |
+          set -euo pipefail
+
+          img="$DOCKER_IMAGE"
+          version_tag="$VERSION_TAG"
+          pg="$PG_VERSION"
+          alpine="$ALPINE_VERSION"
+
+          tags=(
+            "${img}:${pg}"
+            "${img}:${pg}-${version_tag}"
+            "${img}:pg${pg}-alpine${alpine}"
+          )
+
+          if [ "$IS_DEFAULT" = "true" ]; then
+            tags+=("${img}:latest" "${img}:latest-${version_tag}")
+          fi
+
+          tag_args=""
+          for t in "${tags[@]}"; do
+            tag_args="$tag_args -t $t"
+          done
+
+          echo "Building ${img} for Postgres ${pg} on Alpine ${alpine} with tags:"
+          printf '  %s\n' "${tags[@]}"
+
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --build-arg ALPINE_VERSION="$alpine" \
+            --build-arg POSTGRES_VERSION="$pg" \
+            --build-arg SUPERCRONIC_VERSION="$DEFAULT_SUPERCRONIC_VERSION" \
+            --push \
+            $tag_args \
+            .
+
+      - name: Summarize publication
+        env:
+          VERSION_TAG: ${{ steps.version.outputs.value }}
+          PG_VERSION: ${{ matrix.pg_version }}
+          ALPINE_VERSION: ${{ matrix.alpine_version }}
+          IS_DEFAULT: ${{ matrix.latest }}
+        run: |
+          set -euo pipefail
+          summary="Published ${DOCKER_IMAGE}:${PG_VERSION} (Alpine ${ALPINE_VERSION}) from release ${VERSION_TAG}."
+          if [ "$IS_DEFAULT" = "true" ]; then
+            summary="$summary Tagged latest as well."
+          fi
+          echo "$summary" >> "$GITHUB_STEP_SUMMARY"
