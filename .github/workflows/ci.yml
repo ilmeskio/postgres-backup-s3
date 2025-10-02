@@ -45,6 +45,10 @@ jobs:
       - name: Compose build
         run: scripts/build-image.sh
 
+      # We exercise the schedule guardrail so `run.sh` keeps rejecting invalid cron strings inside the container.
+      - name: Validate schedule failure path
+        run: scripts/validate-schedule.sh
+
   # We verify in-place upgrades across every supported Postgres combination so restores stay reliable during rollouts.
   upgrade-smoke-matrix:
     name: Migrate ${{ matrix.from }} -> ${{ matrix.to }}
