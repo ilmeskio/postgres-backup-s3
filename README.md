@@ -94,7 +94,20 @@ production runs. Run `scripts/validate-schedule.sh` to rehearse that behaviour l
 waits for the `crontab is valid` log, then re-runs with a bogus schedule expecting a failure.
 
 Supercronic always exposes `/metrics` and `/health` on `0.0.0.0:9746`, so Prometheus can scrape as soon as you publish the
-port (for example `docker run -p 9746:9746 …`).
+port (for example `docker run -p 9746:9746 …`). The payload always includes Go runtime gauges alongside
+`promhttp_metric_handler_requests_total`. Once a schedule runs you will also see supercronic-specific metrics:
+`supercronic_executions`, `supercronic_successful_executions`, `supercronic_failed_executions`,
+`supercronic_deadline_exceeded`, and the `supercronic_cron_execution_time_seconds` histogram keyed by schedule and
+command. We keep this contract under test with `scripts/metrics-smoke.sh`, and CI runs the same probe on every push.
+Rehearse it locally to see the payload:
+
+```sh
+$ scripts/metrics-smoke.sh
+$ curl -s http://localhost:19746/metrics | head
+```
+
+The listener also returns a plain `OK` from `/health`, giving orchestrators and uptime checks a fast readiness signal
+while Prometheus consumes the richer `/metrics` data.
 
 ### End-to-end smoke test (no real S3 required)
 

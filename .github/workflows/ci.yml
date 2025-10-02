@@ -49,6 +49,11 @@ jobs:
       - name: Validate schedule failure path
         run: scripts/validate-schedule.sh
 
+      # We guarantee the Prometheus endpoint stays reachable by spinning up the
+      # container and scraping supercronic's /metrics handler.
+      - name: Verify metrics endpoint
+        run: scripts/metrics-smoke.sh
+
   # We verify in-place upgrades across every supported Postgres combination so restores stay reliable during rollouts.
   upgrade-smoke-matrix:
     name: Migrate ${{ matrix.from }} -> ${{ matrix.to }}
