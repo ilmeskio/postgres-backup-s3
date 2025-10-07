@@ -26,6 +26,9 @@ docker compose build backup >/dev/null
 
 image="postgres-backup-s3-backup:latest"
 metrics_container="metrics-smoke-$$"
+# We publish the container metrics on 19746 so we keep distance from 9746, ensuring we
+# do not collide with a teammate’s already-running stack while still exercising the
+# same internal endpoint.
 metrics_port="19746"
 metrics_url="http://127.0.0.1:${metrics_port}/metrics"
 
