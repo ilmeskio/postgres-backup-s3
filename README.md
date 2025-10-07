@@ -186,8 +186,3 @@ Key environment variables the stack understands:
   credentials; adjust them to mirror production S3 credentials if desired.
 
 
-## Goals
-[ ] test prometheus metrics and check validate schedule
-[x] add testing to ensure correct build and backup with restore
-[x] walkthough for version upgrade
-[x] leverages https://github.com/aptible/supercronic?tab=readme-ov-file for cron instead of go-cron
