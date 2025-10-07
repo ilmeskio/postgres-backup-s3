@@ -6,10 +6,11 @@
 - Backups and metrics write to container FS (e.g. `/metrics/metrics.txt`); mount volumes accordingly when developing.
 
 ## Build, Test, and Development Commands
-- `docker build --build-arg ALPINE_VERSION=3.16 -t postgres-backup-s3 .` builds image against specific Alpine base.
+- `docker build --build-arg ALPINE_VERSION=3.20 -t postgres-backup-s3 .` builds image against specific Alpine base.
 - `docker compose up -d --build --force-recreate` spins up sample Postgres + backup job for manual verification.
 - `docker exec postgres-backup-s3_backup_1 sh backup.sh` triggers on-demand backup inside running container; append `timestamp` argument to `restore.sh` to test targeted restores.
 - `docker run --rm -v $(pwd)/src:/mnt koalaman/shellcheck:stable /mnt/*.sh` runs linting if you have Docker available.
+- See `CONTRIBUTING.md` for the full checklist we expect before opening a PR.
 
 ## Coding Style & Naming Conventions
 - Scripts are POSIX `sh`; avoid Bash-only features, keep two-space indentation inside blocks.
