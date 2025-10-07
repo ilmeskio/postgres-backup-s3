@@ -3,6 +3,12 @@ This project provides Docker images to periodically back up a PostgreSQL databas
 
 Like everything else I do, the purpose is to contribute to my and others' educational path.
 
+## How this image evolves the upstream project
+The original `postgres-backup-s3` image popularised a lightweight way to push Postgres dumps to S3. This fork keeps the spirit but adds a few capabilities we rely on every day:
+- We run backups under [supercronic](https://github.com/aptible/supercronic), so schedules accept standard cron strings and we get predictable logging plus deadline enforcement.
+- Supercronic exposes Prometheus-friendly metrics and a `/health` endpoint on port `9746`, making it easy to monitor job successes, failures, and runtime durations.
+- Every change runs through a CI matrix that builds the image across the supported Postgres majors, verifies the metrics smoke test, and rehearses major-version migrations, so the published tags stay well-tested.
+
 # Usage
 ## Backup
 ```yaml
