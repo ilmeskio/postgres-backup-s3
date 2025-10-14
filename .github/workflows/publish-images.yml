@@ -1,6 +1,6 @@
 # We publish multi-architecture images to Docker Hub whenever we cut a release (v*) or run the workflow manually.
-# Each Postgres major gets its own tag (e.g., ilmeskio/postgres-backup-s3:16) and we promote the highest supported
-# version to `latest`. Additional tags include the release identifier (e.g., 2025.10.01) and the Alpine base for traceability.
+# Each Postgres major gets its own tag (e.g., ilmeskio/postgres-backup-s3:16); we also append a numeric release suffix
+# (e.g., ilmeskio/postgres-backup-s3:16-3) so teammates can opt into specific internal revisions without a global `latest`.
 name: Publish Images
 
 on:
@@ -27,16 +27,12 @@ jobs:
         include:
           - pg_version: 14
             alpine_version: 3.20
-            latest: false
           - pg_version: 15
             alpine_version: 3.20
-            latest: false
           - pg_version: 16
             alpine_version: 3.20
-            latest: false
           - pg_version: 17
             alpine_version: 3.21
-            latest: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -85,29 +81,24 @@ jobs:
           img="$DOCKER_IMAGE"
           version_tag="$VERSION_TAG"
           pg="$PG_VERSION"
-          alpine="$ALPINE_VERSION"
 
           tags=(
             "${img}:${pg}"
             "${img}:${pg}-${version_tag}"
-            "${img}:pg${pg}-alpine${alpine}"
           )
-
-          if [ "$IS_DEFAULT" = "true" ]; then
-            tags+=("${img}:latest" "${img}:latest-${version_tag}")
-          fi
 
           tag_args=""
           for t in "${tags[@]}"; do
             tag_args="$tag_args -t $t"
           done
 
-          echo "Building ${img} for Postgres ${pg} on Alpine ${alpine} with tags:"
+          echo "Building ${img} for Postgres ${pg} with release suffix ${version_tag}."
+          echo "Publishing tags:"
           printf '  %s\n' "${tags[@]}"
 
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
-            --build-arg ALPINE_VERSION="$alpine" \
+            --build-arg ALPINE_VERSION="$ALPINE_VERSION" \
             --build-arg POSTGRES_VERSION="$pg" \
             --build-arg SUPERCRONIC_VERSION="$DEFAULT_SUPERCRONIC_VERSION" \
             --push \
@@ -118,12 +109,7 @@ jobs:
         env:
           VERSION_TAG: ${{ steps.version.outputs.value }}
           PG_VERSION: ${{ matrix.pg_version }}
-          ALPINE_VERSION: ${{ matrix.alpine_version }}
-          IS_DEFAULT: ${{ matrix.latest }}
         run: |
           set -euo pipefail
-          summary="Published ${DOCKER_IMAGE}:${PG_VERSION} (Alpine ${ALPINE_VERSION}) from release ${VERSION_TAG}."
-          if [ "$IS_DEFAULT" = "true" ]; then
-            summary="$summary Tagged latest as well."
-          fi
+          summary="Published ${DOCKER_IMAGE}:${PG_VERSION} and ${DOCKER_IMAGE}:${PG_VERSION}-${VERSION_TAG}."
           echo "$summary" >> "$GITHUB_STEP_SUMMARY"

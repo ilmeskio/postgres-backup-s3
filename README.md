@@ -42,7 +42,9 @@ services:
       BACKUP_KEEP_DAYS: 7                     # prune backups older than N days; leave empty to disable
       PASSPHRASE: ''                          # provide to encrypt dumps with GPG
 ```
-- Images are tagged by the major PostgreSQL version they bundle, e.g., `ilmeskio/postgres-backup-s3:16`.
+- Images are tagged by the major PostgreSQL version they bundle, e.g., `ilmeskio/postgres-backup-s3:16`. Each release also
+  increments a numeric suffix (`ilmeskio/postgres-backup-s3:16-2`) so we can surface internal updates without a global
+  `latest` tag—pull the anchor for “newest for that major,” or use the suffix to pin a specific revision.
 - All S3-compatible stores work as long as the credentials allow `s3:PutObject` and `s3:ListBucket` calls (AWS S3, MinIO,
   DigitalOcean Spaces, Wasabi, Ceph RGW, Backblaze B2, etc.). Use `S3_ENDPOINT` to point at non-AWS providers.
 - `SCHEDULE` accepts supercronic syntax (standard cron entries plus handy shortcuts). Set it to empty if you only trigger
