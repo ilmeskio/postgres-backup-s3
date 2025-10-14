@@ -67,6 +67,10 @@ export ALPINE_VERSION POSTGRES_VERSION SUPERCRONIC_SHA1SUM
 # We let folks confirm what is about to happen, celebrating that the hook is doing real validation for us.
 echo "Running docker compose build for backup with ALPINE_VERSION=${ALPINE_VERSION}, POSTGRES_VERSION=${POSTGRES_VERSION}, SUPERCRONIC_SHA1SUM=${SUPERCRONIC_SHA1SUM}"
 
+# Before we reach for Docker, we run our static guard so we all catch missing SUPERCRONIC_VERSION wiring immediately.
+# This keeps the publish workflow from silently downgrading supercronic whenever the Dockerfile drifts.
+sh scripts/test-supercronic-arg.sh
+
 # Compose picks up the build arguments declared in Dockerfile via these environment variables, giving us the same build
 # path the smoke test uses without bringing the entire stack online.
 docker compose build backup

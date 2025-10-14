@@ -1,4 +1,5 @@
 ARG ALPINE_VERSION=3.20
+ARG SUPERCRONIC_VERSION=0.2.36
 #
 # We build the runtime on top of the requested Alpine release so we can test
 # multiple combinations locally and publish matching image tags downstream.
@@ -9,9 +10,11 @@ ARG ALPINE_VERSION=3.20
 FROM alpine:${ALPINE_VERSION}
 ARG TARGETARCH
 ARG POSTGRES_VERSION
+ARG SUPERCRONIC_VERSION
 ARG SUPERCRONIC_SHA1SUM
 
 ADD src/install.sh install.sh
+ENV SUPERCRONIC_VERSION=${SUPERCRONIC_VERSION}
 RUN sh install.sh && rm install.sh
 
 ENV POSTGRES_PORT=5432
