@@ -24,6 +24,9 @@ code every day.
   `scripts/test-supercronic-arg.sh` and `docker compose build backup`, matching our GitHub Actions flow.
 - GitHub Actions builds a matrix across supported Postgres majors, runs the smoke scripts, and publishes when we push an
   annotated release tag. When adding new checks, extend the workflow so local and CI behavior stay aligned.
+- We now keep the GitHub CLI (`gh`) in our toolbox, so we can review and rerun pipelines quickly. After every push, run
+  `gh run list --limit 5` to confirm the latest workflow is green, and use `gh run view <run-id> --log` when we need to
+  narrate failures back into fixes.
 - Use `docker compose` scenarios for end-to-end rehearsals (backup + restore, migrations). Record additional scripts under
   `scripts/` so the whole team can reproduce them.
 
