@@ -5,7 +5,10 @@
 # with stale supercronic builds when teammates bump the default in CI.
 #
 # We enable strict mode so our check fails fast whenever the Dockerfile drifts.
-set -euo pipefail
+set -eu
+if (set -o pipefail) 2>/dev/null; then
+  set -o pipefail
+fi
 
 # We verify the Dockerfile declares SUPERCRONIC_VERSION as a build argument at least once so docker build treats the
 # value from our workflow as legitimate.

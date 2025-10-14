@@ -76,7 +76,10 @@ jobs:
           ALPINE_VERSION: ${{ matrix.alpine_version }}
           IS_DEFAULT: ${{ matrix.latest }}
         run: |
-          set -euo pipefail
+          set -eu
+          if (set -o pipefail) 2>/dev/null; then
+            set -o pipefail
+          fi
 
           img="$DOCKER_IMAGE"
           version_tag="$VERSION_TAG"
@@ -110,6 +113,9 @@ jobs:
           VERSION_TAG: ${{ steps.version.outputs.value }}
           PG_VERSION: ${{ matrix.pg_version }}
         run: |
-          set -euo pipefail
+          set -eu
+          if (set -o pipefail) 2>/dev/null; then
+            set -o pipefail
+          fi
           summary="Published ${DOCKER_IMAGE}:${PG_VERSION} and ${DOCKER_IMAGE}:${PG_VERSION}-${VERSION_TAG}."
           echo "$summary" >> "$GITHUB_STEP_SUMMARY"
