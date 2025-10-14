@@ -10,6 +10,8 @@ code every day.
   responsibility and must stay POSIX `sh`.
 - Decision records land under `docs/adr/`; check the index before reinventing a policy and add a new ADR whenever we change
   course.
+- We keep a living `TODO.md` checklist; review it when starting a session so we catch the outstanding release and registry
+  integration steps before diving into fresh tasks.
 
 ## Coding Conventions
 - Keep scripts strict: start with `set -eu` and probe for `pipefail` availability (`if (set -o pipefail) ...`).
