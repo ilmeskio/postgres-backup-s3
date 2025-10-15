@@ -38,6 +38,8 @@ code every day.
   `latest` tag to keep users intentional about the major they deploy.
 - Document changes to tagging, retention, or scheduling policy through ADRs and CHANGELOG/README updates so userland teams
   understand the impact.
+- Before we trigger the **Publish Images** workflow, confirm `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` exist in repository
+  secrets; our `TODO.md` checklist tracks the setup and the dry-run we expect before announcing a release.
 
 ## Pull Requests & Reviews
 - Match the existing commit style: short, present-tense subjects under ~65 characters; explain context and include test
