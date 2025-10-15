@@ -12,6 +12,8 @@ code every day.
   course.
 - We keep a living `TODO.md` checklist; review it when starting a session so we catch the outstanding release and registry
   integration steps before diving into fresh tasks.
+- Once an ADR is accepted, we treat it as immutable. If our direction changes, we author a fresh record instead of editing
+  the original, and only touch existing ADRs to correct minor typos.
 
 ## Coding Conventions
 - Keep scripts strict: start with `set -eu` and probe for `pipefail` availability (`if (set -o pipefail) ...`).
