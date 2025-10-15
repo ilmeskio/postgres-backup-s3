@@ -40,6 +40,8 @@ code every day.
   understand the impact.
 - Before we trigger the **Publish Images** workflow, confirm `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` exist in repository
   secrets; our `TODO.md` checklist tracks the setup and the dry-run we expect before announcing a release.
+  - When we add Alpine versions to any matrix, quote the values (e.g., `'3.20'`) so YAML never strips trailing zeros and
+    Docker keeps targeting the intended base tag.
 
 ## Pull Requests & Reviews
 - Match the existing commit style: short, present-tense subjects under ~65 characters; explain context and include test

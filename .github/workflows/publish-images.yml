@@ -26,13 +26,14 @@ jobs:
       matrix:
         include:
           - pg_version: 14
-            alpine_version: 3.20
+            # Quote 3.20 so YAML keeps the trailing zero and we do not fall back to the deprecated 3.2 tag.
+            alpine_version: '3.20'
           - pg_version: 15
-            alpine_version: 3.20
+            alpine_version: '3.20'
           - pg_version: 16
-            alpine_version: 3.20
+            alpine_version: '3.20'
           - pg_version: 17
-            alpine_version: 3.21
+            alpine_version: '3.21'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
