@@ -54,6 +54,10 @@ jobs:
       - name: Verify metrics endpoint
         run: scripts/metrics-smoke.sh
 
+      # We confirm the default retention behaviour by exercising the backup flow against MinIO.
+      - name: Verify backup retention default
+        run: scripts/retention-smoke.sh
+
   # We verify in-place upgrades across every supported Postgres combination so restores stay reliable during rollouts.
   upgrade-smoke-matrix:
     name: Migrate ${{ matrix.from }} -> ${{ matrix.to }}

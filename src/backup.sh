@@ -10,6 +10,7 @@ set -euo pipefail
 
 # We treat optional inputs as empty strings when not provided so `set -u` does not abort.
 PASSPHRASE="${PASSPHRASE:-}"
+
 BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-}"
 
 echo "Creating backup of $POSTGRES_DATABASE database..."
@@ -42,10 +43,19 @@ rm "$local_file"
 
 echo "Backup complete."
 
+# When retention is enabled, we translate days into a cutoff timestamp, and we subtract one extra
+# second when BACKUP_KEEP_DAYS=0 so the filter never deletes the backup we just uploaded.
 if [ -n "$BACKUP_KEEP_DAYS" ]; then
   sec=$((86400*BACKUP_KEEP_DAYS))
-  date_from_remove=$(date -d "@$(($(date +%s) - sec))" +%Y-%m-%d)
-  backups_query="Contents[?LastModified<='${date_from_remove} 00:00:00'].{Key: Key}"
+  cutoff_epoch=$(date +%s)
+  if [ "$sec" -eq 0 ]; then
+    cutoff_epoch=$((cutoff_epoch - 1))
+  else
+    cutoff_epoch=$((cutoff_epoch - sec))
+  fi
+  # We pivot to UTC timestamps so our JMESPath query lines up with S3's LastModified values.
+  date_from_remove=$(date -u -d "@${cutoff_epoch}" +%Y-%m-%dT%H:%M:%SZ)
+  backups_query="Contents[?LastModified<'${date_from_remove}'].{Key: Key}"
 
   echo "Removing old backups from $S3_BUCKET..."
   aws $aws_args s3api list-objects \

@@ -39,7 +39,7 @@ services:
       S3_ENDPOINT: https://s3.amazonaws.com   # point to MinIO / other S3-compatible URLs as needed
       S3_S3V4: yes                            # set to "yes" when the endpoint requires signature v4
       SCHEDULE: '@weekly'                     # cron cadence for supercronic
-      BACKUP_KEEP_DAYS: 7                     # prune backups older than N days; leave empty to disable
+      BACKUP_KEEP_DAYS: ''                    # prune backups older than N days when set (e.g., 7); leave empty to disable
       PASSPHRASE: ''                          # provide to encrypt dumps with GPG
 ```
 - Images are tagged by the major PostgreSQL version they bundle, e.g., `ilmeskio/postgres-backup-s3:16`. Each release also
@@ -49,7 +49,7 @@ services:
   DigitalOcean Spaces, Wasabi, Ceph RGW, Backblaze B2, etc.). Use `S3_ENDPOINT` to point at non-AWS providers.
 - `SCHEDULE` accepts supercronic syntax (standard cron entries plus handy shortcuts). Set it to empty if you only trigger
   backups manually.
-- `BACKUP_KEEP_DAYS` prunes objects older than N days; leave it blank to retain everything.
+- `BACKUP_KEEP_DAYS` prunes objects older than N days when set. Leave it blank to retain every backup; set it to a number like `7` when we want automatic retention.
 - `PASSPHRASE` enables GPG encryption. When omitted, dumps stay unencrypted for quicker restores.
 - Run `docker exec <container name> sh backup.sh` to trigger an immediate backup, regardless of the schedule.
 

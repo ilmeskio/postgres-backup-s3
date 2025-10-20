@@ -47,8 +47,8 @@ services:
     environment:
       # Cron expression understood by supercronic; we default to @weekly so the container stays quiet during dev.
       SCHEDULE: "${SCHEDULE:-@weekly}"
-      # Number of days to keep backups when pruning via AWS CLI; empty disables pruning.
-      BACKUP_KEEP_DAYS: "${BACKUP_KEEP_DAYS:-7}"
+      # Number of days to keep backups when pruning via AWS CLI; leave empty to retain everything, set to a number (e.g., 7) to enable pruning.
+      BACKUP_KEEP_DAYS: "${BACKUP_KEEP_DAYS:-}"
       # Region/endpoint/credentials describe where we send the dumps; MinIO defaults keep everything local.
       S3_REGION: "${S3_REGION:-us-east-1}"
       S3_ENDPOINT: "${S3_ENDPOINT:-http://minio:9000}"
