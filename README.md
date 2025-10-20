@@ -53,6 +53,12 @@ services:
 - `PASSPHRASE` enables GPG encryption. When omitted, dumps stay unencrypted for quicker restores.
 - Run `docker exec <container name> sh backup.sh` to trigger an immediate backup, regardless of the schedule.
 
+### Retention behaviour
+We keep pruning disabled by default so every environment decides how aggressive it wants to be with historical dumps. Setting `BACKUP_KEEP_DAYS` turns pruning on:
+- A positive value (for example `7`) keeps everything from the last 7 days and removes anything older.
+- Using `0` acts like “retain only the most recent backup,” which can be handy for lightweight dev buckets.
+- If you orchestrate multiple backup jobs against the same bucket, give each job its own `S3_PREFIX` so they never delete one another’s files.
+
 ## Restore
 > **WARNING:** DATA LOSS! All database objects will be dropped and re-created.
 ### ... from latest backup

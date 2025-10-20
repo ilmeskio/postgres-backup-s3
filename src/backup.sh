@@ -53,16 +53,47 @@ if [ -n "$BACKUP_KEEP_DAYS" ]; then
   else
     cutoff_epoch=$((cutoff_epoch - sec))
   fi
-  # We pivot to UTC timestamps so our JMESPath query lines up with S3's LastModified values.
-  date_from_remove=$(date -u -d "@${cutoff_epoch}" +%Y-%m-%dT%H:%M:%SZ)
-  backups_query="Contents[?LastModified<'${date_from_remove}'].{Key: Key}"
-
   echo "Removing old backups from $S3_BUCKET..."
-  aws $aws_args s3api list-objects \
-    --bucket "${S3_BUCKET}" \
-    --prefix "${S3_PREFIX}" \
-    --query "${backups_query}" \
-    --output text \
-    | xargs -n1 -t -I 'KEY' aws $aws_args s3 rm s3://"${S3_BUCKET}"/'KEY'
+  keys_output=$(
+    aws $aws_args s3api list-objects \
+      --bucket "${S3_BUCKET}" \
+      --prefix "${S3_PREFIX}" \
+      --query 'Contents[].[LastModified,Key]' \
+      --output text
+  )
+
+  keys_to_remove=""
+  if [ -n "$keys_output" ]; then
+    while IFS=$(printf '\t') read -r _ key; do
+      if [ -z "${key:-}" ]; then
+        continue
+      fi
+
+      base_key=${key#${S3_PREFIX}/}
+      base_key=${base_key%.gpg}
+      base_key=${base_key%.dump}
+
+      timestamp_part=${base_key#${POSTGRES_DATABASE}_}
+      if [ "$timestamp_part" = "$base_key" ]; then
+        continue
+      fi
+
+      timestamp_formatted=$(printf '%s\n' "$timestamp_part" | sed 's/T/ /')
+      key_epoch=$(date -u -d "$timestamp_formatted" +%s 2>/dev/null || true)
+      if [ -z "$key_epoch" ]; then
+        continue
+      fi
+
+      if [ "$key_epoch" -lt "$cutoff_epoch" ]; then
+        keys_to_remove="${keys_to_remove}${key}"$'\n'
+      fi
+    done <<EOF
+$keys_output
+EOF
+  fi
+
+  if [ -n "$keys_to_remove" ]; then
+    printf '%s' "$keys_to_remove" | sed '/^$/d' | xargs -n1 -t -I 'KEY' aws $aws_args s3 rm s3://"${S3_BUCKET}"/'KEY'
+  fi
   echo "Removal complete."
 fi
