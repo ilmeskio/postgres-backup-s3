@@ -82,20 +82,21 @@ jobs:
           fi
 
           img="$DOCKER_IMAGE"
-          version_tag="$VERSION_TAG"
+          : "${VERSION_TAG:?VERSION_TAG is required}"
           pg="$PG_VERSION"
 
           tags=(
             "${img}:${pg}"
-            "${img}:${pg}-${version_tag}"
+            "${img}:${pg}-${VERSION_TAG}"
           )
 
-          tag_args=""
+          tag_args=()
+          # We accumulate tag flags individually so spacing never causes globbing when we invoke docker buildx.
           for t in "${tags[@]}"; do
-            tag_args="$tag_args -t $t"
+            tag_args+=("-t" "$t")
           done
 
-          echo "Building ${img} for Postgres ${pg} with release suffix ${version_tag}."
+          echo "Building ${img} for Postgres ${pg} with release suffix ${VERSION_TAG}."
           echo "Publishing tags:"
           printf '  %s\n' "${tags[@]}"
 
@@ -105,7 +106,7 @@ jobs:
             --build-arg POSTGRES_VERSION="$pg" \
             --build-arg SUPERCRONIC_VERSION="$DEFAULT_SUPERCRONIC_VERSION" \
             --push \
-            $tag_args \
+            "${tag_args[@]}" \
             .
 
       - name: Summarize publication

@@ -135,4 +135,4 @@ jobs:
             --sbom=false \
             --output "type=tar,dest=build-${PLATFORM//\//-}.tar" .
           # We discard the tarball after the build completes so CI storage stays lean.
-          rm -f build-${PLATFORM//\//-}.tar
+          rm -f "build-${PLATFORM//\//-}.tar"
