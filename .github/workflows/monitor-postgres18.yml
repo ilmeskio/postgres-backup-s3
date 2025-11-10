@@ -35,20 +35,25 @@ jobs:
           # We read Docker Hub's tag list so we follow the newest Alpine base image that actually exists in the registry.
           latest_branch=""
           tags_url="https://hub.docker.com/v2/repositories/library/alpine/tags?page_size=100&ordering=last_updated"
+          jq_program='
+            .results
+            | map(select(.name | test("^[0-9]+\\.[0-9]+(\\.[0-9]+)?$")))
+            | map({
+                name: .name,
+                major: ((.name | split(".")[0]) | tonumber),
+                minor: ((.name | split(".")[1]) | tonumber)
+              })
+            | sort_by(.major, .minor)
+            | last?
+            | if . == null then empty else "v\(.major).\(.minor)" end
+          '
           if command -v jq >/dev/null 2>&1; then
             tags_payload="$(curl -fsSL "$tags_url" 2>/dev/null || true)"
             if [ -n "$tags_payload" ]; then
-              latest_branch="$(printf '%s' "$tags_payload" | jq -r '
-                .results
-                | map(select(.name | test("^[0-9]+\\.[0-9]+(\\.[0-9]+)?$")))
-                | map({
-                    major: ((.name | split(".")[0]) | tonumber),
-                    minor: ((.name | split(".")[1]) | tonumber)
-                  })
-                | sort_by(.major, .minor)
-                | last?
-                | if . == null then empty else "v\(.major).\(.minor)" end
-              ')
+              latest_branch="$(
+                printf '%s' "$tags_payload" |
+                  jq -r "$jq_program" 2>/dev/null || true
+              )"
             fi
           else
             echo "jq missing on runner; falling back to static branches."
