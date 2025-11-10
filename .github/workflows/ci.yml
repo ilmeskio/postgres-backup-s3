@@ -28,7 +28,7 @@ jobs:
           - pg_version: 17
             alpine_version: "3.21"
           - pg_version: 18
-            alpine_version: "3.22"
+            alpine_version: "edge"
     steps:
       # We fetch the latest commit so every following step has the source we want to validate.
       - name: Checkout

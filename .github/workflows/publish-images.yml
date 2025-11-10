@@ -35,7 +35,7 @@ jobs:
           - pg_version: 17
             alpine_version: '3.21'
           - pg_version: 18
-            alpine_version: '3.22'
+            alpine_version: 'edge'
     steps:
       - name: Checkout
         uses: actions/checkout@v4

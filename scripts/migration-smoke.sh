@@ -146,7 +146,8 @@ resolve_alpine_version() {
       echo "3.21"
       ;;
     18)
-      echo "3.22"
+      # The Postgres 18 client is available in Alpine edge; use 'edge' so apk can find postgresql18-client
+      echo "edge"
       ;;
     *)
       echo "3.20"
