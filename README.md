@@ -45,6 +45,7 @@ services:
 - Images are tagged by the major PostgreSQL version they bundle, e.g., `ilmeskio/postgres-backup-s3:16`. Each release also
   increments a numeric suffix (`ilmeskio/postgres-backup-s3:16-2`) so we can surface internal updates without a global
   `latest` tag—pull the anchor for “newest for that major,” or use the suffix to pin a specific revision.
+- The project supports Postgres majors 14 through 18; images are published per-major (for example `ilmeskio/postgres-backup-s3:18`).
 - All S3-compatible stores work as long as the credentials allow `s3:PutObject` and `s3:ListBucket` calls (AWS S3, MinIO,
   DigitalOcean Spaces, Wasabi, Ceph RGW, Backblaze B2, etc.). Use `S3_ENDPOINT` to point at non-AWS providers.
 - `SCHEDULE` accepts supercronic syntax (standard cron entries plus handy shortcuts). Set it to empty if you only trigger
@@ -149,6 +150,16 @@ When you rely on this repository’s published image, you can practice the cutov
    ```
 
    Because both stacks target the same S3 bucket, the restore container sees the dumps created by the 16.x job. After running `docker compose -f compose.v17.yml exec restore17 sh restore.sh <timestamp>`, point your application at `postgres17` and confirm everything works. Once satisfied, you can tear down the temporary stacks with `docker compose -f compose.v16.yml down` and `docker compose -f compose.v17.yml down`.
+
+### Example: migrating from Postgres 17 to 18 with Docker Compose
+
+Follow the same pattern as above when rehearsing a jump to Postgres 18. Use `compose.v17.yml` to capture a dump with the `:17` image, then create `compose.v18.yml` that points at the `:18` image when restoring. Example snippets mirror the 16→17 flow but replace `16`/`17` with `17`/`18` in service names and image tags.
+
+1. Spin up the Postgres 17 source and the `ilmeskio/postgres-backup-s3:17` backup service to publish a dump to your bucket/prefix.
+
+2. Start a Postgres 18 target and a `ilmeskio/postgres-backup-s3:18` restore service that reads the same bucket/prefix and run `restore.sh <timestamp>`.
+
+Because the repository publishes per-major images, you can exercise these flows locally against the matching image tags to validate upgrades before cutting a production release.
 
 # Acknowledgements
 This project follows the path and great work of [schickling/dockerfiles](https://github.com/schickling/dockerfiles)

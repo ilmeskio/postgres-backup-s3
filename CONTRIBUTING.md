@@ -67,7 +67,7 @@ Following these steps keeps our upgrade story predictable for anyone depending o
 
 ## Release Readiness
 - Before tagging a release or pushing image changes, ensure the `githooks/pre-push` hook (or an explicit run of `scripts/build-image.sh`) passes.
-- Our **Publish Images** workflow builds multi-architecture images (Postgres majors 14–17 for `linux/amd64` and `linux/arm64`) and promotes the highest major to `latest`. Run it on tags matching `v*` or trigger it manually with a custom `version_tag`.
+ - Our **Publish Images** workflow builds multi-architecture images (Postgres majors 14–18 for `linux/amd64` and `linux/arm64`) and promotes the highest major to `latest`. Run it on tags matching `v*` or trigger it manually with a custom `version_tag`.
 - Check that the workflow secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` remain valid; mention any credential or registry changes in the release notes so the team can follow up.
 
 With these guardrails, we can evolve the project quickly while keeping restores reliable for everyone depending on it. Thanks for helping us maintain that standard!

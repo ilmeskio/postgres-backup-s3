@@ -27,7 +27,8 @@ jobs:
             alpine_version: "3.20"
           - pg_version: 17
             alpine_version: "3.21"
-          # We skip Postgres 18 for now because Alpine 3.22 does not yet publish postgresql18-client.
+          - pg_version: 18
+            alpine_version: "3.22"
     steps:
       # We fetch the latest commit so every following step has the source we want to validate.
       - name: Checkout
@@ -79,7 +80,11 @@ jobs:
             to: 17
           - from: 16
             to: 17
-          # We skip Postgres 18 migrations until Alpine publishes client packages for that major.
+          # Migration matrix now includes Postgres 18 (Alpine 3.22) because client packages are available.
+          - from: 16
+            to: 18
+          - from: 17
+            to: 18
     steps:
       # We pull the repository again so this job has a clean workspace tied to the migration matrix entry.
       - name: Checkout
