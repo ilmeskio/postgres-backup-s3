@@ -3,6 +3,11 @@
 # Postgres 18 coverage in the main CI matrix.
 name: Monitor Postgres 18 Client
 
+# We ask for write access to issues so our GitHub Script step can open or reuse the tracking ticket once Alpine flips the switch.
+permissions:
+  contents: read
+  issues: write
+
 on:
   schedule:
     - cron: '0 5 * * 1'
@@ -34,8 +39,8 @@ jobs:
             if [ "$branch" = "edge" ]; then
               url="https://pkgs.alpinelinux.org/package/edge/main/x86_64/postgresql18-client"
             else
-              version="${branch#v}"
-              url="https://pkgs.alpinelinux.org/package/${version}/main/x86_64/postgresql18-client"
+              # We keep the branch prefix (for example v3.22) because the Alpine package site encodes it in the URL path.
+              url="https://pkgs.alpinelinux.org/package/${branch}/main/x86_64/postgresql18-client"
             fi
 
             status="$(curl -s -o /dev/null -w "%{http_code}" "$url" || echo "000")"
