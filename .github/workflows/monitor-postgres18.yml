@@ -32,27 +32,34 @@ jobs:
           selected_branch=""
           selected_url=""
 
-          # We inspect the CDN index so we automatically follow the newest stable Alpine branch.
+          # We read Docker Hub's tag list so we follow the newest Alpine base image that actually exists in the registry.
           latest_branch=""
-          index_url="https://dl-cdn.alpinelinux.org/alpine/"
-          if listing="$(curl -fsSL "$index_url" 2>/dev/null || true)"; then
-            latest_branch="$(printf '%s' "$listing" \
-              | sed -n 's/.*href="\(v[0-9][0-9]*\.[0-9][0-9]*\)\/".*/\1/p' \
-              | sort -Vr \
-              | head -n 1)"
+          tags_url="https://hub.docker.com/v2/repositories/library/alpine/tags?page_size=100&ordering=last_updated"
+          if command -v jq >/dev/null 2>&1; then
+            tags_payload="$(curl -fsSL "$tags_url" 2>/dev/null || true)"
+            if [ -n "$tags_payload" ]; then
+              latest_branch="$(printf '%s' "$tags_payload" | jq -r '
+                .results
+                | map(select(.name | test("^[0-9]+\\.[0-9]+(\\.[0-9]+)?$")))
+                | map({
+                    major: ((.name | split(".")[0]) | tonumber),
+                    minor: ((.name | split(".")[1]) | tonumber)
+                  })
+                | sort_by(.major, .minor)
+                | last?
+                | if . == null then empty else "v\(.major).\(.minor)" end
+              ')
+            fi
+          else
+            echo "jq missing on runner; falling back to static branches."
           fi
 
-          # We seed the search list with the detected branch (if any) and fall back to known releases when parsing fails.
+          # We keep a static fallback list so the monitor keeps running even when the Docker Hub call fails.
           fallback_branches="v3.22 v3.21"
           branches="${latest_branch:-}"
-          for fallback in $fallback_branches; do
-            case " $branches " in
-              *" $fallback "*) continue ;;
-              *) branches="$branches $fallback" ;;
-            esac
-          done
-
-          branches="${branches# }"
+          if [ -z "$branches" ]; then
+            branches="$fallback_branches"
+          fi
 
           for branch in $branches; do
             # We keep the branch prefix (for example v3.22) because the Alpine package site encodes it in the URL path.
