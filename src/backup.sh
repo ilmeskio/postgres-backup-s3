@@ -86,17 +86,16 @@ if [ -n "$BACKUP_KEEP_DAYS" ]; then
     cutoff_epoch=$((cutoff_epoch - sec))
   fi
   echo "Removing old backups from $S3_BUCKET..."
-  keys_output=$(
-    aws $aws_args s3api list-objects \
+  keys_output=$(aws $aws_args s3api list-objects \
       --bucket "${S3_BUCKET}" \
       --prefix "${S3_PREFIX}" \
       --query 'Contents[].[LastModified,Key]' \
-      --output text
-  )
+      --output text)
 
   keys_to_remove=""
+  newest_epoch=""
   if [ -n "$keys_output" ]; then
-    while IFS=$(printf '\t') read -r _ key; do
+    while IFS=$(printf '\t') read -r last_modified key; do
       if [ -z "${key:-}" ]; then
         continue
       fi
@@ -118,12 +117,34 @@ if [ -n "$BACKUP_KEEP_DAYS" ]; then
         continue
       fi
 
+      # Track the newest backup set so we never prune the freshest upload when KEEP=0.
+      if [ -z "$newest_epoch" ] || [ "$key_epoch" -gt "$newest_epoch" ]; then
+        newest_epoch="$key_epoch"
+      fi
+
       if [ "$key_epoch" -lt "$cutoff_epoch" ]; then
         keys_to_remove="${keys_to_remove}${key}"$'\n'
       fi
     done <<EOF
 $keys_output
 EOF
+  fi
+
+  # When KEEP=0 we subtract one second to set cutoff just before "now"; still, guard the newest
+  # backup set explicitly so we never prune the most recent upload or its sidecars.
+  if [ -n "$newest_epoch" ]; then
+    keys_to_remove=$(printf '%s' "$keys_to_remove" | awk -v newest="$newest_epoch" -v prefix="$S3_PREFIX" -v db="$POSTGRES_DATABASE" '
+      {
+        key=$0;
+        gsub(/\.gpg$/,"",key); gsub(/\.dump$/,"",key); gsub(/\.md5$/,"",key); gsub(/\.fingerprints$/,"",key);
+        stem=key; sub(prefix"/","",stem);
+        sub(db"_","",stem);
+        gsub(/T/," ",stem);
+        cmd="date -u -d '"stem"' +%s";
+        cmd | getline epoch;
+        close(cmd);
+        if (epoch==newest) { next } else { print $0 }
+      }')
   fi
 
   if [ -n "$keys_to_remove" ]; then
