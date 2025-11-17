@@ -71,6 +71,12 @@ docker exec <container name> sh restore.sh
 docker exec <container name> sh restore.sh <timestamp>
 ```
 
+### Optional post-restore verification
+Set `RESTORE_VERIFY=1` to run a lightweight query after the restore finishes. By default we execute
+`SELECT 1;`, and you can override it with `RESTORE_VERIFY_QUERY` to point at a table or schema that
+matters to your deployment. When the query fails, the script exits non-zero so operators can surface
+the failure during audits; on success it logs the query output for evidence.
+
 ## Migrating to a new PostgreSQL version
 When you promote your production database to a newer major, treat the backup flow as a rehearsal for the cutover:
 
