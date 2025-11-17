@@ -110,7 +110,6 @@ aws_cli s3 rm "s3://$bucket/$prefix/" --recursive >/dev/null 2>&1 || true
 
 run_backup() {
   retention_env="$1"
-  echo "[retention-smoke] running backup with env: $retention_env"
   docker run --rm \
     --network "$network" \
     -e SCHEDULE='' \
@@ -128,7 +127,7 @@ run_backup() {
     -e POSTGRES_PASSWORD='postgres' \
     $retention_env \
     "$image" \
-    sh -lc 'set -x; sh backup.sh'
+    sh -lc 'sh backup.sh'
 }
 
 list_backup_keys() {
