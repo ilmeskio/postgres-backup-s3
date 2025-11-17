@@ -15,6 +15,9 @@ set -euo pipefail
 PASSPHRASE="${PASSPHRASE:-}"
 RESTORE_VERIFY="${RESTORE_VERIFY:-}"
 RESTORE_VERIFY_TABLES="${RESTORE_VERIFY_TABLES:-}"
+# We allow an optional mutation step (primarily for tests) between restore and verification so we can
+# prove the fingerprint guard catches divergence when data changes after the import.
+RESTORE_MUTATE_SQL="${RESTORE_MUTATE_SQL:-}"
 
 s3_uri_base="s3://${S3_BUCKET}/${S3_PREFIX}"
 
@@ -58,6 +61,11 @@ conn_opts="-h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER -d $POSTGRES_DA
 
 echo "Restoring from backup..."
 pg_restore $conn_opts --clean --if-exists db.dump
+
+if [ -n "$RESTORE_MUTATE_SQL" ]; then
+  echo "Applying post-restore mutation (testing hook)..."
+  psql $conn_opts -v ON_ERROR_STOP=1 -c "$RESTORE_MUTATE_SQL"
+fi
 
 if [ -n "$RESTORE_VERIFY" ]; then
   # We compute deterministic hashes so we can prove the restored database matches the dump we pulled
