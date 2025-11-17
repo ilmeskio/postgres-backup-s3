@@ -43,7 +43,7 @@ minio_container="retention-minio-$$"
 bucket="${RETENTION_SMOKE_BUCKET:-retention-smoke}"
 unique_suffix="${RETENTION_SMOKE_ID:-$(date +%s)-$$}"
 prefix="${RETENTION_SMOKE_PREFIX:-retention-smoke-${unique_suffix}}"
-postgres_database="${POSTGRES_DATABASE:-postgres}"
+POSTGRES_DATABASE="${POSTGRES_DATABASE:-postgres}"
 region="${S3_REGION:-us-east-1}"
 minio_access="${MINIO_ROOT_USER:-minioadmin}"
 minio_secret="${MINIO_ROOT_PASSWORD:-minioadmin}"
@@ -121,7 +121,7 @@ run_backup() {
     -e S3_SECRET_ACCESS_KEY="$minio_secret" \
     -e S3_S3V4='yes' \
     -e POSTGRES_HOST="$postgres_container" \
-    -e POSTGRES_DATABASE='postgres' \
+    -e POSTGRES_DATABASE="$POSTGRES_DATABASE" \
     -e POSTGRES_USER='postgres' \
     -e POSTGRES_PASSWORD='postgres' \
     $retention_env \
@@ -140,7 +140,7 @@ list_backup_keys() {
 # We count backup *sets* (a dump plus sidecars) by stripping suffixes and taking uniq.
 list_backup_sets() {
   list_backup_keys \
-    | sed "s|.*/${postgres_database}_||" \
+    | sed "s|.*/${POSTGRES_DATABASE}_||" \
     | sed 's/\.dump$//' \
     | sed 's/\.dump\.gpg$//' \
     | sed 's/\.fingerprints$//' \
