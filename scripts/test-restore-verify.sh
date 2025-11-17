@@ -12,17 +12,31 @@ fi
 set -e
 
 echo "Bootstrapping docker compose stack for restore verification tests..."
-docker compose down -v --remove-orphans >/dev/null 2>&1 || true
-docker compose up -d --build postgres minio backup
 
 # We lean on the same credentials the compose file advertises so teammates do not juggle test-only
 # values. MinIO defaults mirror AWS-compatible semantics for these calls.
 S3_BUCKET="${S3_BUCKET:-demo-backups}"
 S3_PREFIX="${S3_PREFIX:-backup}"
 POSTGRES_USER_COMPOSE="${POSTGRES_USER:-user}"
+MINIO_ROOT_USER="${MINIO_ROOT_USER:-minioadmin}"
+MINIO_ROOT_PASSWORD="${MINIO_ROOT_PASSWORD:-minioadmin}"
+S3_REGION="${S3_REGION:-us-east-1}"
+S3_ACCESS_KEY_ID="${S3_ACCESS_KEY_ID:-minioadmin}"
+S3_SECRET_ACCESS_KEY="${S3_SECRET_ACCESS_KEY:-minioadmin}"
+# AWS_* variables feed the CLI when we create buckets via docker exec.
+AWS_ACCESS_KEY_ID="$S3_ACCESS_KEY_ID"
+AWS_SECRET_ACCESS_KEY="$S3_SECRET_ACCESS_KEY"
+AWS_DEFAULT_REGION="$S3_REGION"
+# Match the MinIO endpoint our compose file advertises so aws CLI talks to the right place.
+aws_args="--endpoint-url ${S3_ENDPOINT:-http://minio:9000}"
 
-echo "Ensuring MinIO bucket exists..."
-docker compose exec -T backup aws $aws_args s3 mb "s3://${S3_BUCKET}" 2>/dev/null || true
+docker compose down -v --remove-orphans >/dev/null 2>&1 || true
+docker compose up -d --build postgres minio backup
+# MinIO can take a moment to surface the API; this alias call is best-effort and will be skipped if the client is missing.
+docker compose exec -T minio mc alias set local http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null 2>&1 || true
+
+# Create the bucket once so the first backup upload succeeds; ignore "already owned" noise.
+docker compose exec -T backup env AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" AWS_DEFAULT_REGION="$AWS_DEFAULT_REGION" aws $aws_args s3 mb "s3://${S3_BUCKET}" 2>/dev/null || true
 
 psql_compose() {
   docker compose exec -T postgres psql -U "$POSTGRES_USER_COMPOSE" -d postgres -v ON_ERROR_STOP=1 -c "$1"
@@ -47,7 +61,7 @@ run_restore() {
 
   echo "--- ${description} ---"
   set +e
-  docker compose exec -T backup env $restore_env sh restore.sh
+  docker compose exec -T backup sh -c "env $restore_env sh restore.sh"
   status=$?
   set -e
 

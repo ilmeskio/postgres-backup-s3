@@ -22,8 +22,25 @@ pg_dump --format=custom \
         $PGDUMP_EXTRA_OPTS \
         > db.dump
 
+# We capture deterministic per-table fingerprints from the live database so restores can compare
+# against the original content without relying on dump formatting.
+fingerprint_file="db.fingerprints"
+echo "Computing table fingerprints from source database..."
+table_list_cmd="SELECT quote_ident(schemaname)||'.'||quote_ident(tablename) FROM pg_tables WHERE schemaname NOT IN ('pg_catalog','information_schema') ORDER BY 1;"
+tables_to_check=$(psql -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER -d $POSTGRES_DATABASE -At -c "$table_list_cmd")
+
+echo "# table md5(row_to_json sorted)" > "$fingerprint_file"
+for table in $tables_to_check; do
+  data_hash=$(psql -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER -d $POSTGRES_DATABASE -At -c "SELECT coalesce(md5(string_agg(md5(row_to_json(t)::text), '' ORDER BY md5(row_to_json(t)::text))), 'd41d8cd98f00b204e9800998ecf8427e') FROM $table t;")
+  echo "$table $data_hash" >> "$fingerprint_file"
+done
+
 timestamp=$(date +"%Y-%m-%dT%H:%M:%S")
 s3_uri_base="s3://${S3_BUCKET}/${S3_PREFIX}/${POSTGRES_DATABASE}_${timestamp}.dump"
+fingerprint_file="db.dump.md5"
+fingerprint_s3_uri_base="s3://${S3_BUCKET}/${S3_PREFIX}/${POSTGRES_DATABASE}_${timestamp}.md5"
+table_fingerprint_local="db.fingerprints"
+table_fingerprint_s3="s3://${S3_BUCKET}/${S3_PREFIX}/${POSTGRES_DATABASE}_${timestamp}.fingerprints"
 
 if [ -n "$PASSPHRASE" ]; then
   echo "Encrypting backup..."
@@ -32,14 +49,23 @@ if [ -n "$PASSPHRASE" ]; then
   rm db.dump
   local_file="db.dump.gpg"
   s3_uri="${s3_uri_base}.gpg"
+  # We hash the encrypted payload so restores can compare against what we uploaded.
+  md5sum "${local_file}" | awk '{print $1}' > "$fingerprint_file"
+  fingerprint_s3_uri="${fingerprint_s3_uri_base}.gpg"
 else
   local_file="db.dump"
   s3_uri="$s3_uri_base"
+  md5sum "${local_file}" | awk '{print $1}' > "$fingerprint_file"
+  fingerprint_s3_uri="$fingerprint_s3_uri_base"
 fi
 
 echo "Uploading backup to $S3_BUCKET..."
 aws $aws_args s3 cp "$local_file" "$s3_uri"
+aws $aws_args s3 cp "$table_fingerprint_local" "$table_fingerprint_s3"
+aws $aws_args s3 cp "$fingerprint_file" "$fingerprint_s3_uri"
 rm "$local_file"
+rm "$table_fingerprint_local"
+rm "$fingerprint_file"
 
 echo "Backup complete."
 

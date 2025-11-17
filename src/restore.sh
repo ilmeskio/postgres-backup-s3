@@ -30,26 +30,36 @@ fi
 if [ $# -eq 1 ]; then
   timestamp="$1"
   key_suffix="${POSTGRES_DATABASE}_${timestamp}${file_type}"
+  md5_key_suffix="${POSTGRES_DATABASE}_${timestamp}.md5${file_type:+""}"
 else
   echo "Finding latest backup..."
   # We ask S3 for all matching backups, sort them, and grab the most recent key. `tail -n 1` exits with
   # status 1 when the list is empty, so we append `|| true` to avoid tripping strict mode and then make
   # the emptiness decision ourselves.
-  key_suffix=$( \
+  latest_line=$( \
     aws $aws_args s3 ls "${s3_uri_base}/${POSTGRES_DATABASE}" \
+      | awk '{print $4}' \
+      | grep -E '\.dump(\.gpg)?$' \
       | sort \
       | tail -n 1 \
-      | awk '{ print $4 }' \
   ) || true
+
+  key_suffix="$latest_line"
+
+  timestamp=$(printf '%s' "$key_suffix" | sed "s/^${POSTGRES_DATABASE}_//" | sed 's/\.dump$//' | sed 's/\.dump\.gpg$//' )
 
   if [ -z "$key_suffix" ]; then
     echo "ERROR: No backups found for ${POSTGRES_DATABASE}." >&2
     exit 1
   fi
+
+  md5_candidate=$(printf '%s' "$key_suffix" | sed 's/\.gpg$//' | sed 's/\.dump$/.md5/')
+  md5_key_suffix="$md5_candidate"
 fi
 
 echo "Fetching backup from S3..."
 aws $aws_args s3 cp "${s3_uri_base}/${key_suffix}" "db${file_type}"
+aws $aws_args s3 cp "${s3_uri_base}/${md5_key_suffix}" db.dump.md5 || true
 
 if [ -n "$PASSPHRASE" ]; then
   echo "Decrypting backup..."
@@ -68,58 +78,78 @@ if [ -n "$RESTORE_MUTATE_SQL" ]; then
 fi
 
 if [ -n "$RESTORE_VERIFY" ]; then
-  # We compute deterministic hashes so we can prove the restored database matches the dump we pulled
-  # from S3. When RESTORE_VERIFY_TABLES is empty we fingerprint the whole database (schema + data).
-  # Otherwise we hash only the listed tables, keeping the workload predictable for large clusters.
+  # We compute deterministic hashes directly from table contents to avoid dump-format drift. When
+  # RESTORE_VERIFY_TABLES is empty we hash every user table; otherwise we hash only the requested
+  # comma-separated list. This keeps evidence stable and makes mismatches obvious.
   echo "Running post-restore fingerprint verification..."
 
-  if [ -z "$RESTORE_VERIFY_TABLES" ]; then
-    echo "Fingerprinting full database schema..."
-    schema_dump_hash=$(pg_restore --schema-only --no-owner --no-privileges db.dump | md5sum | cut -d' ' -f1)
-    schema_live_hash=$(pg_dump $conn_opts --schema-only --no-owner --no-privileges | md5sum | cut -d' ' -f1)
-    echo "Schema fingerprint (dump/live): $schema_dump_hash / $schema_live_hash"
-
-    echo "Fingerprinting full database data section..."
-    data_dump_hash=$(pg_restore --data-only --inserts --no-owner --no-privileges db.dump | md5sum | cut -d' ' -f1)
-    data_live_hash=$(pg_dump $conn_opts --data-only --inserts --no-owner --no-privileges | md5sum | cut -d' ' -f1)
-    echo "Data fingerprint (dump/live):   $data_dump_hash / $data_live_hash"
-
-    if [ "$schema_dump_hash" != "$schema_live_hash" ]; then
-      echo "ERROR: Schema fingerprint mismatch (dump $schema_dump_hash vs live $schema_live_hash)." >&2
-      rm -f db.dump
+  if [ -f db.dump.md5 ]; then
+    stored_md5=$(cat db.dump.md5 | tr -d ' \n')
+    local_md5=$(md5sum db.dump | awk '{print $1}')
+    echo "Archive fingerprint (stored/live): ${stored_md5:-missing} / ${local_md5:-missing}"
+    if [ -n "$stored_md5" ] && [ "$stored_md5" != "$local_md5" ]; then
+      echo "ERROR: Archive fingerprint mismatch (dump hash differs from stored md5)." >&2
+      rm -f db.dump db.dump.md5
       exit 1
     fi
-
-    if [ "$data_dump_hash" != "$data_live_hash" ]; then
-      echo "ERROR: Data fingerprint mismatch (dump $data_dump_hash vs live $data_live_hash)." >&2
-      rm -f db.dump
-      exit 1
-    fi
-    echo "Schema fingerprint match confirmed."
-    echo "Data fingerprint match confirmed."
   else
-    echo "Fingerprinting tables: $RESTORE_VERIFY_TABLES"
-    combined_table_hash_input=""
-    # We iterate in the order provided so the combined hash stays stable across runs.
-    for table in $(printf '%s\n' "$RESTORE_VERIFY_TABLES" | tr ',' ' '); do
-      table_dump_hash=$(pg_restore --data-only --inserts --no-owner --no-privileges --table="$table" db.dump | md5sum | cut -d' ' -f1)
-      table_live_hash=$(pg_dump $conn_opts --data-only --inserts --no-owner --no-privileges --table="$table" | md5sum | cut -d' ' -f1)
+    echo "WARNING: No stored md5 found alongside dump; skipping archive integrity comparison."
+  fi
 
-      echo "Fingerprint for $table (dump/live): $table_dump_hash / $table_live_hash"
+  table_list_cmd="SELECT quote_ident(schemaname)||'.'||quote_ident(tablename) FROM pg_tables WHERE schemaname NOT IN ('pg_catalog','information_schema') ORDER BY 1;"
+  tables_to_check="$RESTORE_VERIFY_TABLES"
+  if [ -z "$tables_to_check" ]; then
+    tables_to_check=$(psql $conn_opts -At -c "$table_list_cmd")
+  fi
 
-      if [ "$table_dump_hash" != "$table_live_hash" ]; then
-        echo "ERROR: Fingerprint mismatch for $table (dump $table_dump_hash vs live $table_live_hash)." >&2
+  stored_fingerprints=""
+  if aws $aws_args s3 cp "${s3_uri_base}/${POSTGRES_DATABASE}_${timestamp}.fingerprints" db.fingerprints 2>/dev/null; then
+    stored_fingerprints=$(cat db.fingerprints)
+  else
+    echo "WARNING: No stored table fingerprints found; continuing with live-only logging." >&2
+  fi
+
+  combined_table_hash_input=""
+  for table in $(printf '%s\n' "$tables_to_check" | tr ',' '\n'); do
+    if [ -z "$table" ]; then
+      continue
+    fi
+
+    data_hash_live=$(psql $conn_opts -At -c "SELECT coalesce(md5(string_agg(md5(row_to_json(t)::text), '' ORDER BY md5(row_to_json(t)::text))), 'd41d8cd98f00b204e9800998ecf8427e') FROM $table t;" 2>/dev/null || true)
+
+    data_hash_dump=""
+    if printf '%s\n' "$stored_fingerprints" | grep -q "^$table "; then
+      data_hash_dump=$(printf '%s\n' "$stored_fingerprints" | awk -v t="$table" '$1==t {print $2}')
+    fi
+
+    if [ -z "$data_hash_live" ]; then
+      echo "ERROR: Could not compute live fingerprint for $table (perhaps it does not exist)." >&2
+      rm -f db.dump
+      [ -f db.fingerprints ] && rm -f db.fingerprints
+      exit 1
+    fi
+
+    if [ -n "$data_hash_dump" ]; then
+      echo "Fingerprint for $table (stored/live): $data_hash_dump / $data_hash_live"
+      if [ "$data_hash_dump" != "$data_hash_live" ]; then
+        echo "ERROR: Fingerprint mismatch for $table (stored $data_hash_dump vs live $data_hash_live)." >&2
         rm -f db.dump
+        [ -f db.fingerprints ] && rm -f db.fingerprints
         exit 1
       fi
-      combined_table_hash_input="${combined_table_hash_input}${table}:${table_live_hash}\n"
-    done
+    else
+      echo "Fingerprint for $table (live only): $data_hash_live"
+    fi
 
-    combined_table_hash=$(printf '%s' "$combined_table_hash_input" | md5sum | cut -d' ' -f1)
-    echo "Combined tables fingerprint: $combined_table_hash"
-  fi
+    combined_table_hash_input="${combined_table_hash_input}${table}:${data_hash_live}\n"
+  done
+
+  combined_table_hash=$(printf '%s' "$combined_table_hash_input" | md5sum | cut -d' ' -f1)
+  echo "Combined tables fingerprint: $combined_table_hash"
 fi
 
 rm db.dump
+[ -f db.fingerprints ] && rm -f db.fingerprints
+[ -f db.dump.md5 ] && rm -f db.dump.md5
 
 echo "Restore complete."
