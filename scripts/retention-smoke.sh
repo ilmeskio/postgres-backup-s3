@@ -43,6 +43,7 @@ minio_container="retention-minio-$$"
 bucket="${RETENTION_SMOKE_BUCKET:-retention-smoke}"
 unique_suffix="${RETENTION_SMOKE_ID:-$(date +%s)-$$}"
 prefix="${RETENTION_SMOKE_PREFIX:-retention-smoke-${unique_suffix}}"
+POSTGRES_DATABASE="${POSTGRES_DATABASE:-postgres}"
 region="${S3_REGION:-us-east-1}"
 minio_access="${MINIO_ROOT_USER:-minioadmin}"
 minio_secret="${MINIO_ROOT_PASSWORD:-minioadmin}"
@@ -120,7 +121,8 @@ run_backup() {
     -e S3_SECRET_ACCESS_KEY="$minio_secret" \
     -e S3_S3V4='yes' \
     -e POSTGRES_HOST="$postgres_container" \
-    -e POSTGRES_DATABASE='postgres' \
+    -e POSTGRES_PORT="${POSTGRES_PORT:-5432}" \
+    -e POSTGRES_DATABASE="$POSTGRES_DATABASE" \
     -e POSTGRES_USER='postgres' \
     -e POSTGRES_PASSWORD='postgres' \
     $retention_env \
@@ -136,13 +138,23 @@ list_backup_keys() {
   printf "%s\n" "$keys" | tr '\t' '\n' | sed '/^$/d'
 }
 
-# We count objects by expanding the list to one key per line and piping through wc.
-backup_key_count() {
-  keys="$(list_backup_keys)"
-  if [ -z "$keys" ]; then
+# We count backup *sets* (a dump plus sidecars) by stripping suffixes and taking uniq.
+list_backup_sets() {
+  list_backup_keys \
+    | sed "s|.*/${POSTGRES_DATABASE}_||" \
+    | sed 's/\.dump$//' \
+    | sed 's/\.dump\.gpg$//' \
+    | sed 's/\.fingerprints$//' \
+    | sed 's/\.md5$//' \
+    | sort -u
+}
+
+backup_set_count() {
+  sets="$(list_backup_sets)"
+  if [ -z "$sets" ]; then
     echo "0"
   else
-    printf "%s\n" "$keys" | wc -l | tr -d ' '
+    printf "%s\n" "$sets" | wc -l | tr -d ' '
   fi
 }
 
@@ -150,45 +162,48 @@ backup_key_count() {
 zero_keep_env='-e BACKUP_KEEP_DAYS=0'
 run_backup "$zero_keep_env" >/dev/null
 first_keys="$(list_backup_keys)"
+first_sets="$(list_backup_sets)"
 if [ -z "$first_keys" ]; then
   echo "ERROR: First backup did not leave any objects in the bucket." >&2
+  docker logs "$postgres_container" || true
   exit 1
 fi
-first_key=$(printf '%s\n' "$first_keys" | head -n1)
-if [ "$(backup_key_count)" -ne 1 ]; then
-  echo "ERROR: Expected exactly one object after the first zero-day run." >&2
+if [ "$(backup_set_count)" -ne 1 ]; then
+  echo "ERROR: Expected exactly one backup set after the first zero-day run." >&2
   printf 'Keys:\n%s\n' "$first_keys" >&2
   exit 1
 fi
+first_set=$(printf '%s\n' "$first_sets" | head -n1)
 
 # We give timestamps a moment to advance so MinIO stores the next dump under a distinct object key.
 sleep 2
 run_backup "$zero_keep_env" >/dev/null
 second_keys="$(list_backup_keys)"
+second_sets="$(list_backup_sets)"
 if [ -z "$second_keys" ]; then
   echo "ERROR: Second backup removed all objects; expected the latest dump to remain." >&2
   exit 1
 fi
 
-if printf '%s\n' "$second_keys" | grep -qx "$first_key"; then
-  echo "ERROR: Expected the second backup to replace the first, but '${first_key}' still exists." >&2
+if printf '%s\n' "$second_sets" | grep -qx "$first_set"; then
+  echo "ERROR: Expected the second backup to replace the first, but '${first_set}' still exists." >&2
   printf 'Current keys after second run:\n%s\n' "$second_keys" >&2
   exit 1
 fi
-second_key=$(printf '%s\n' "$second_keys" | head -n1)
+second_set=$(printf '%s\n' "$second_sets" | head -n1)
 
 # Opting out of pruning should let the previous dump stick around alongside the fresh one.
 sleep 2
 run_backup "-e BACKUP_KEEP_DAYS=" >/dev/null
 opt_out_keys="$(list_backup_keys)"
-opt_out_count="$(backup_key_count)"
+opt_out_count="$(backup_set_count)"
 if [ "$opt_out_count" -lt 2 ]; then
   echo "ERROR: Opt-out run should retain earlier backups, but only ${opt_out_count} object(s) remain." >&2
   printf 'Keys:\n%s\n' "$opt_out_keys" >&2
   exit 1
 fi
-if ! printf '%s\n' "$opt_out_keys" | grep -qx "$second_key"; then
-  echo "ERROR: Opt-out run lost the previously retained backup (${second_key})." >&2
+if ! printf '%s\n' "$(list_backup_sets)" | grep -qx "$second_set"; then
+  echo "ERROR: Opt-out run lost the previously retained backup (${second_set})." >&2
   printf 'Keys:\n%s\n' "$opt_out_keys" >&2
   exit 1
 fi
@@ -197,14 +212,14 @@ fi
 sleep 2
 run_backup "$zero_keep_env" >/dev/null
 final_keys="$(list_backup_keys)"
-final_count="$(backup_key_count)"
+final_count="$(backup_set_count)"
 if [ "$final_count" -ne 1 ]; then
-  echo "ERROR: Final zero-day run should collapse to one backup, but ${final_count} objects remain." >&2
+  echo "ERROR: Final zero-day run should collapse to one backup set, but ${final_count} remain." >&2
   printf 'Keys:\n%s\n' "$final_keys" >&2
   exit 1
 fi
-if printf '%s\n' "$final_keys" | grep -qx "$second_key"; then
-  echo "ERROR: Final zero-day run failed to remove the previously retained backup (${second_key})." >&2
+if printf '%s\n' "$(list_backup_sets)" | grep -qx "$second_set"; then
+  echo "ERROR: Final zero-day run failed to remove the previously retained backup (${second_set})." >&2
   printf 'Keys:\n%s\n' "$final_keys" >&2
   exit 1
 fi
