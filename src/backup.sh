@@ -95,56 +95,39 @@ if [ -n "$BACKUP_KEEP_DAYS" ]; then
   keys_to_remove=""
   newest_epoch=""
   if [ -n "$keys_output" ]; then
-    while IFS=$(printf '\t') read -r last_modified key; do
-      if [ -z "${key:-}" ]; then
-        continue
-      fi
-
+    # First pass: find the newest backup set epoch so we never prune the most recent upload.
+    while IFS=$(printf '\t') read -r _ key; do
+      if [ -z "${key:-}" ]; then continue; fi
       base_key=${key#${S3_PREFIX}/}
-      base_key=${base_key%.gpg}
-      base_key=${base_key%.dump}
-      base_key=${base_key%.md5}
-      base_key=${base_key%.fingerprints}
-
+      base_key=${base_key%.gpg}; base_key=${base_key%.dump}; base_key=${base_key%.md5}; base_key=${base_key%.fingerprints}
       timestamp_part=${base_key#${POSTGRES_DATABASE}_}
-      if [ "$timestamp_part" = "$base_key" ]; then
-        continue
-      fi
-
+      if [ "$timestamp_part" = "$base_key" ]; then continue; fi
       timestamp_formatted=$(printf '%s\n' "$timestamp_part" | sed 's/T/ /')
       key_epoch=$(date -u -d "$timestamp_formatted" +%s 2>/dev/null || true)
-      if [ -z "$key_epoch" ]; then
-        continue
-      fi
-
-      # Track the newest backup set so we never prune the freshest upload when KEEP=0.
+      if [ -z "$key_epoch" ]; then continue; fi
       if [ -z "$newest_epoch" ] || [ "$key_epoch" -gt "$newest_epoch" ]; then
         newest_epoch="$key_epoch"
       fi
+    done <<EOF
+$keys_output
+EOF
 
-      if [ "$key_epoch" -lt "$cutoff_epoch" ]; then
+    # Second pass: mark keys older than cutoff, but always spare the newest set.
+    while IFS=$(printf '\t') read -r _ key; do
+      if [ -z "${key:-}" ]; then continue; fi
+      base_key=${key#${S3_PREFIX}/}
+      base_key=${base_key%.gpg}; base_key=${base_key%.dump}; base_key=${base_key%.md5}; base_key=${base_key%.fingerprints}
+      timestamp_part=${base_key#${POSTGRES_DATABASE}_}
+      if [ "$timestamp_part" = "$base_key" ]; then continue; fi
+      timestamp_formatted=$(printf '%s\n' "$timestamp_part" | sed 's/T/ /')
+      key_epoch=$(date -u -d "$timestamp_formatted" +%s 2>/dev/null || true)
+      if [ -z "$key_epoch" ]; then continue; fi
+      if [ "$key_epoch" -lt "$cutoff_epoch" ] && [ "$key_epoch" -lt "$newest_epoch" ]; then
         keys_to_remove="${keys_to_remove}${key}"$'\n'
       fi
     done <<EOF
 $keys_output
 EOF
-  fi
-
-  # When KEEP=0 we subtract one second to set cutoff just before "now"; still, guard the newest
-  # backup set explicitly so we never prune the most recent upload or its sidecars.
-  if [ -n "$newest_epoch" ]; then
-    keys_to_remove=$(printf '%s' "$keys_to_remove" | awk -v newest="$newest_epoch" -v prefix="$S3_PREFIX" -v db="$POSTGRES_DATABASE" '
-      {
-        key=$0;
-        gsub(/\.gpg$/,"",key); gsub(/\.dump$/,"",key); gsub(/\.md5$/,"",key); gsub(/\.fingerprints$/,"",key);
-        stem=key; sub(prefix"/","",stem);
-        sub(db"_","",stem);
-        gsub(/T/," ",stem);
-        cmd="date -u -d '"stem"' +%s";
-        cmd | getline epoch;
-        close(cmd);
-        if (epoch==newest) { next } else { print $0 }
-      }')
   fi
 
   if [ -n "$keys_to_remove" ]; then
