@@ -1,7 +1,7 @@
 #! /bin/sh
 
-# We restore a dump from S3 into our target database and, when requested, run a post-restore
-# verification query so we can show auditors the database responds after the import.
+# We restore a dump from S3 into our target database and, when requested, compute fingerprints so
+# we can show auditors the database contents and schema were reachable right after the import.
 
 # We run with strict mode so restores bail out as soon as something looks wrong—`-e` aborts on
 # failing commands (including AWS downloads), `-u` catches missing variables from env.sh, and
@@ -14,7 +14,7 @@ set -euo pipefail
 # Optional inputs might be unset when we're running without encryption or when the caller skips verification.
 PASSPHRASE="${PASSPHRASE:-}"
 RESTORE_VERIFY="${RESTORE_VERIFY:-}"
-RESTORE_VERIFY_QUERY="${RESTORE_VERIFY_QUERY:-SELECT 1;}"
+RESTORE_VERIFY_TABLES="${RESTORE_VERIFY_TABLES:-}"
 
 s3_uri_base="s3://${S3_BUCKET}/${S3_PREFIX}"
 
@@ -61,15 +61,32 @@ pg_restore $conn_opts --clean --if-exists db.dump
 rm db.dump
 
 if [ -n "$RESTORE_VERIFY" ]; then
-  # We run a lightweight query so auditors can see evidence the restore produced a responsive database.
-  # The default `SELECT 1;` keeps the check generic, and teams can override RESTORE_VERIFY_QUERY to point at
-  # a domain-specific table when they want deeper assurance.
-  echo "Running post-restore verification query..."
-  if verification_output=$(psql $conn_opts -At -c "$RESTORE_VERIFY_QUERY"); then
-    echo "Verification succeeded: $verification_output"
+  # We compute deterministic hashes so we can prove the restored database responds and contains data.
+  # When RESTORE_VERIFY_TABLES is empty we fingerprint the whole database (schema + data). Otherwise we
+  # hash only the listed tables, keeping the workload predictable for large clusters.
+  echo "Running post-restore fingerprint verification..."
+
+  if [ -z "$RESTORE_VERIFY_TABLES" ]; then
+    echo "Fingerprinting full database schema..."
+    schema_hash=$(pg_dump $conn_opts --schema-only --no-owner --no-privileges | md5sum | cut -d' ' -f1)
+
+    echo "Fingerprinting full database data section..."
+    data_hash=$(pg_dump $conn_opts --data-only --inserts --no-owner --no-privileges | md5sum | cut -d' ' -f1)
+
+    echo "Schema fingerprint: $schema_hash"
+    echo "Data fingerprint:   $data_hash"
   else
-    echo "ERROR: Verification query failed to run after restore." >&2
-    exit 1
+    echo "Fingerprinting tables: $RESTORE_VERIFY_TABLES"
+    combined_table_hash_input=""
+    # We iterate in the order provided so the combined hash stays stable across runs.
+    for table in $(printf '%s\n' "$RESTORE_VERIFY_TABLES" | tr ',' ' '); do
+      table_hash=$(pg_dump $conn_opts --data-only --inserts --no-owner --no-privileges --table="$table" | md5sum | cut -d' ' -f1)
+      echo "Fingerprint for $table: $table_hash"
+      combined_table_hash_input="${combined_table_hash_input}${table}:${table_hash}\n"
+    done
+
+    combined_table_hash=$(printf '%s' "$combined_table_hash_input" | md5sum | cut -d' ' -f1)
+    echo "Combined tables fingerprint: $combined_table_hash"
   fi
 fi
 

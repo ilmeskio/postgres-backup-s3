@@ -72,10 +72,10 @@ docker exec <container name> sh restore.sh <timestamp>
 ```
 
 ### Optional post-restore verification
-Set `RESTORE_VERIFY=1` to run a lightweight query after the restore finishes. By default we execute
-`SELECT 1;`, and you can override it with `RESTORE_VERIFY_QUERY` to point at a table or schema that
-matters to your deployment. When the query fails, the script exits non-zero so operators can surface
-the failure during audits; on success it logs the query output for evidence.
+Set `RESTORE_VERIFY=1` to fingerprint the restored database. When `RESTORE_VERIFY_TABLES` is empty we
+hash the full schema and data using `pg_dump` plus `md5sum`; when you provide a comma-separated list
+in `RESTORE_VERIFY_TABLES`, we hash only those tables and emit a combined digest. Any failure in these
+fingerprints exits non-zero so you can use the output as audit evidence.
 
 ## Migrating to a new PostgreSQL version
 When you promote your production database to a newer major, treat the backup flow as a rehearsal for the cutover:
