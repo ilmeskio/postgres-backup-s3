@@ -69,10 +69,12 @@ if [ -n "$RESTORE_VERIFY" ]; then
     echo "Fingerprinting full database schema..."
     schema_dump_hash=$(pg_restore --schema-only --no-owner --no-privileges db.dump | md5sum | cut -d' ' -f1)
     schema_live_hash=$(pg_dump $conn_opts --schema-only --no-owner --no-privileges | md5sum | cut -d' ' -f1)
+    echo "Schema fingerprint (dump/live): $schema_dump_hash / $schema_live_hash"
 
     echo "Fingerprinting full database data section..."
     data_dump_hash=$(pg_restore --data-only --inserts --no-owner --no-privileges db.dump | md5sum | cut -d' ' -f1)
     data_live_hash=$(pg_dump $conn_opts --data-only --inserts --no-owner --no-privileges | md5sum | cut -d' ' -f1)
+    echo "Data fingerprint (dump/live):   $data_dump_hash / $data_live_hash"
 
     if [ "$schema_dump_hash" != "$schema_live_hash" ]; then
       echo "ERROR: Schema fingerprint mismatch (dump $schema_dump_hash vs live $schema_live_hash)." >&2
@@ -85,9 +87,8 @@ if [ -n "$RESTORE_VERIFY" ]; then
       rm -f db.dump
       exit 1
     fi
-
-    echo "Schema fingerprint match: $schema_live_hash"
-    echo "Data fingerprint match:   $data_live_hash"
+    echo "Schema fingerprint match confirmed."
+    echo "Data fingerprint match confirmed."
   else
     echo "Fingerprinting tables: $RESTORE_VERIFY_TABLES"
     combined_table_hash_input=""
@@ -96,13 +97,13 @@ if [ -n "$RESTORE_VERIFY" ]; then
       table_dump_hash=$(pg_restore --data-only --inserts --no-owner --no-privileges --table="$table" db.dump | md5sum | cut -d' ' -f1)
       table_live_hash=$(pg_dump $conn_opts --data-only --inserts --no-owner --no-privileges --table="$table" | md5sum | cut -d' ' -f1)
 
+      echo "Fingerprint for $table (dump/live): $table_dump_hash / $table_live_hash"
+
       if [ "$table_dump_hash" != "$table_live_hash" ]; then
         echo "ERROR: Fingerprint mismatch for $table (dump $table_dump_hash vs live $table_live_hash)." >&2
         rm -f db.dump
         exit 1
       fi
-
-      echo "Fingerprint for $table: $table_live_hash"
       combined_table_hash_input="${combined_table_hash_input}${table}:${table_live_hash}\n"
     done
 
