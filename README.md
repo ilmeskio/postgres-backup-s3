@@ -72,11 +72,17 @@ docker exec <container name> sh restore.sh <timestamp>
 ```
 
 ### Optional post-restore verification
-Set `RESTORE_VERIFY=1` to fingerprint the restored database against the dump that was just applied.
-When `RESTORE_VERIFY_TABLES` is empty we hash the full schema and data with `pg_dump`/`pg_restore`
-and log both dump and live fingerprints before comparing them; when you provide a comma-separated list
-in `RESTORE_VERIFY_TABLES`, we hash only those tables, log both sides, and fail on any mismatch. All
-fingerprints remain in the output for audit evidence.
+Set `RESTORE_VERIFY=1` to fingerprint the restored database against the fingerprints captured at backup
+time. During backup we now store two sidecar objects in S3 alongside the dump:
+
+- `<timestamp>.fingerprints` — per-table hashes computed from the source database rows, ordered
+  deterministically via `md5(row_to_json(...))`. These are used for table-level comparisons after restore.
+- `<timestamp>.md5` — an md5 of the dump archive (or encrypted archive) to guard against transfer
+  corruption.
+
+During restore we download the dump, its md5, and the fingerprint file. When `RESTORE_VERIFY_TABLES` is
+empty we verify every user table; when set, we verify only the comma-separated list you provide. We log
+stored/live fingerprints and fail on any mismatch so you can keep the output as ISO 27001 evidence.
 
 ## Migrating to a new PostgreSQL version
 When you promote your production database to a newer major, treat the backup flow as a rehearsal for the cutover:

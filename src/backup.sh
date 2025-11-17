@@ -23,23 +23,29 @@ pg_dump --format=custom \
         > db.dump
 
 # We capture deterministic per-table fingerprints from the live database so restores can compare
-# against the original content without relying on dump formatting.
-fingerprint_file="db.fingerprints"
+# against the original content without relying on dump formatting. These fingerprints ride next to
+# the dump in S3 and let us prove the restore matches what we backed up.
+table_fingerprint_local="db.fingerprints"
 echo "Computing table fingerprints from source database..."
 table_list_cmd="SELECT quote_ident(schemaname)||'.'||quote_ident(tablename) FROM pg_tables WHERE schemaname NOT IN ('pg_catalog','information_schema') ORDER BY 1;"
 tables_to_check=$(psql -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER -d $POSTGRES_DATABASE -At -c "$table_list_cmd")
 
-echo "# table md5(row_to_json sorted)" > "$fingerprint_file"
+# We log a header so auditors know each line is `table md5-hash`. Every hash is deterministic because
+# we sort rows by the md5 of their JSON representation before aggregating. Empty tables use the md5 of
+# an empty string so they are still represented in the evidence file.
+echo "# table md5(row_to_json sorted)" > "$table_fingerprint_local"
 for table in $tables_to_check; do
-  data_hash=$(psql -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER -d $POSTGRES_DATABASE -At -c "SELECT coalesce(md5(string_agg(md5(row_to_json(t)::text), '' ORDER BY md5(row_to_json(t)::text))), 'd41d8cd98f00b204e9800998ecf8427e') FROM $table t;")
-  echo "$table $data_hash" >> "$fingerprint_file"
+  data_hash=$(psql -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER -d $POSTGRES_DATABASE -At \
+    -c "SELECT coalesce(md5(string_agg(md5(row_to_json(t)::text), '' ORDER BY md5(row_to_json(t)::text))), 'd41d8cd98f00b204e9800998ecf8427e') FROM $table t;")
+  echo "$table $data_hash" >> "$table_fingerprint_local"
 done
 
+# We name all artifacts with the same timestamped stem so operators can correlate the dump, its md5,
+# and the per-table fingerprints when debugging or auditing a restore.
 timestamp=$(date +"%Y-%m-%dT%H:%M:%S")
 s3_uri_base="s3://${S3_BUCKET}/${S3_PREFIX}/${POSTGRES_DATABASE}_${timestamp}.dump"
-fingerprint_file="db.dump.md5"
-fingerprint_s3_uri_base="s3://${S3_BUCKET}/${S3_PREFIX}/${POSTGRES_DATABASE}_${timestamp}.md5"
-table_fingerprint_local="db.fingerprints"
+archive_md5_file="db.dump.md5"                       # md5 of the dump (or encrypted dump) for transport integrity
+archive_md5_s3_uri="s3://${S3_BUCKET}/${S3_PREFIX}/${POSTGRES_DATABASE}_${timestamp}.md5"
 table_fingerprint_s3="s3://${S3_BUCKET}/${S3_PREFIX}/${POSTGRES_DATABASE}_${timestamp}.fingerprints"
 
 if [ -n "$PASSPHRASE" ]; then
@@ -49,23 +55,23 @@ if [ -n "$PASSPHRASE" ]; then
   rm db.dump
   local_file="db.dump.gpg"
   s3_uri="${s3_uri_base}.gpg"
-  # We hash the encrypted payload so restores can compare against what we uploaded.
-  md5sum "${local_file}" | awk '{print $1}' > "$fingerprint_file"
-  fingerprint_s3_uri="${fingerprint_s3_uri_base}.gpg"
+  # We hash the encrypted payload so restores can compare against exactly what we uploaded.
+  md5sum "${local_file}" | awk '{print $1}' > "$archive_md5_file"
 else
   local_file="db.dump"
   s3_uri="$s3_uri_base"
-  md5sum "${local_file}" | awk '{print $1}' > "$fingerprint_file"
-  fingerprint_s3_uri="$fingerprint_s3_uri_base"
+  md5sum "${local_file}" | awk '{print $1}' > "$archive_md5_file"
 fi
 
 echo "Uploading backup to $S3_BUCKET..."
+# We ship three artifacts: the dump (optionally encrypted), a table fingerprint sidecar, and an
+# md5 of the dump to catch transfer corruption.
 aws $aws_args s3 cp "$local_file" "$s3_uri"
 aws $aws_args s3 cp "$table_fingerprint_local" "$table_fingerprint_s3"
-aws $aws_args s3 cp "$fingerprint_file" "$fingerprint_s3_uri"
+aws $aws_args s3 cp "$archive_md5_file" "$archive_md5_s3_uri"
 rm "$local_file"
 rm "$table_fingerprint_local"
-rm "$fingerprint_file"
+rm "$archive_md5_file"
 
 echo "Backup complete."
 
