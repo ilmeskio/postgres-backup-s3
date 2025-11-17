@@ -110,6 +110,7 @@ aws_cli s3 rm "s3://$bucket/$prefix/" --recursive >/dev/null 2>&1 || true
 
 run_backup() {
   retention_env="$1"
+  echo "[retention-smoke] running backup with env: $retention_env"
   docker run --rm \
     --network "$network" \
     -e SCHEDULE='' \
@@ -121,12 +122,13 @@ run_backup() {
     -e S3_SECRET_ACCESS_KEY="$minio_secret" \
     -e S3_S3V4='yes' \
     -e POSTGRES_HOST="$postgres_container" \
+    -e POSTGRES_PORT="${POSTGRES_PORT:-5432}" \
     -e POSTGRES_DATABASE="$POSTGRES_DATABASE" \
     -e POSTGRES_USER='postgres' \
     -e POSTGRES_PASSWORD='postgres' \
     $retention_env \
     "$image" \
-    sh -lc 'sh backup.sh'
+    sh -lc 'set -x; sh backup.sh'
 }
 
 list_backup_keys() {
@@ -164,6 +166,7 @@ first_keys="$(list_backup_keys)"
 first_sets="$(list_backup_sets)"
 if [ -z "$first_keys" ]; then
   echo "ERROR: First backup did not leave any objects in the bucket." >&2
+  docker logs "$postgres_container" || true
   exit 1
 fi
 if [ "$(backup_set_count)" -ne 1 ]; then
