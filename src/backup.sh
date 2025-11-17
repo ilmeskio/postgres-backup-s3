@@ -104,6 +104,8 @@ if [ -n "$BACKUP_KEEP_DAYS" ]; then
       base_key=${key#${S3_PREFIX}/}
       base_key=${base_key%.gpg}
       base_key=${base_key%.dump}
+      base_key=${base_key%.md5}
+      base_key=${base_key%.fingerprints}
 
       timestamp_part=${base_key#${POSTGRES_DATABASE}_}
       if [ "$timestamp_part" = "$base_key" ]; then
