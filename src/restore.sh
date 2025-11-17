@@ -58,36 +58,59 @@ conn_opts="-h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER -d $POSTGRES_DA
 
 echo "Restoring from backup..."
 pg_restore $conn_opts --clean --if-exists db.dump
-rm db.dump
 
 if [ -n "$RESTORE_VERIFY" ]; then
-  # We compute deterministic hashes so we can prove the restored database responds and contains data.
-  # When RESTORE_VERIFY_TABLES is empty we fingerprint the whole database (schema + data). Otherwise we
-  # hash only the listed tables, keeping the workload predictable for large clusters.
+  # We compute deterministic hashes so we can prove the restored database matches the dump we pulled
+  # from S3. When RESTORE_VERIFY_TABLES is empty we fingerprint the whole database (schema + data).
+  # Otherwise we hash only the listed tables, keeping the workload predictable for large clusters.
   echo "Running post-restore fingerprint verification..."
 
   if [ -z "$RESTORE_VERIFY_TABLES" ]; then
     echo "Fingerprinting full database schema..."
-    schema_hash=$(pg_dump $conn_opts --schema-only --no-owner --no-privileges | md5sum | cut -d' ' -f1)
+    schema_dump_hash=$(pg_restore --schema-only --no-owner --no-privileges db.dump | md5sum | cut -d' ' -f1)
+    schema_live_hash=$(pg_dump $conn_opts --schema-only --no-owner --no-privileges | md5sum | cut -d' ' -f1)
 
     echo "Fingerprinting full database data section..."
-    data_hash=$(pg_dump $conn_opts --data-only --inserts --no-owner --no-privileges | md5sum | cut -d' ' -f1)
+    data_dump_hash=$(pg_restore --data-only --inserts --no-owner --no-privileges db.dump | md5sum | cut -d' ' -f1)
+    data_live_hash=$(pg_dump $conn_opts --data-only --inserts --no-owner --no-privileges | md5sum | cut -d' ' -f1)
 
-    echo "Schema fingerprint: $schema_hash"
-    echo "Data fingerprint:   $data_hash"
+    if [ "$schema_dump_hash" != "$schema_live_hash" ]; then
+      echo "ERROR: Schema fingerprint mismatch (dump $schema_dump_hash vs live $schema_live_hash)." >&2
+      rm -f db.dump
+      exit 1
+    fi
+
+    if [ "$data_dump_hash" != "$data_live_hash" ]; then
+      echo "ERROR: Data fingerprint mismatch (dump $data_dump_hash vs live $data_live_hash)." >&2
+      rm -f db.dump
+      exit 1
+    fi
+
+    echo "Schema fingerprint match: $schema_live_hash"
+    echo "Data fingerprint match:   $data_live_hash"
   else
     echo "Fingerprinting tables: $RESTORE_VERIFY_TABLES"
     combined_table_hash_input=""
     # We iterate in the order provided so the combined hash stays stable across runs.
     for table in $(printf '%s\n' "$RESTORE_VERIFY_TABLES" | tr ',' ' '); do
-      table_hash=$(pg_dump $conn_opts --data-only --inserts --no-owner --no-privileges --table="$table" | md5sum | cut -d' ' -f1)
-      echo "Fingerprint for $table: $table_hash"
-      combined_table_hash_input="${combined_table_hash_input}${table}:${table_hash}\n"
+      table_dump_hash=$(pg_restore --data-only --inserts --no-owner --no-privileges --table="$table" db.dump | md5sum | cut -d' ' -f1)
+      table_live_hash=$(pg_dump $conn_opts --data-only --inserts --no-owner --no-privileges --table="$table" | md5sum | cut -d' ' -f1)
+
+      if [ "$table_dump_hash" != "$table_live_hash" ]; then
+        echo "ERROR: Fingerprint mismatch for $table (dump $table_dump_hash vs live $table_live_hash)." >&2
+        rm -f db.dump
+        exit 1
+      fi
+
+      echo "Fingerprint for $table: $table_live_hash"
+      combined_table_hash_input="${combined_table_hash_input}${table}:${table_live_hash}\n"
     done
 
     combined_table_hash=$(printf '%s' "$combined_table_hash_input" | md5sum | cut -d' ' -f1)
     echo "Combined tables fingerprint: $combined_table_hash"
   fi
 fi
+
+rm db.dump
 
 echo "Restore complete."
